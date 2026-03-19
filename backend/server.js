@@ -78,20 +78,20 @@ app.post('/api/register', async (req, res) => {
 // Endpoint di login
 app.post('/api/login', async (req, res) => {
   try {
-    const { userId, password } = req.body;
+    const { email, password } = req.body;
 
-    if (!userId || !password) {
-      return res.status(400).json({ message: 'Inserisci User ID e password' });
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Inserisci email e password' });
     }
 
     const conn = await pool.getConnection();
     try {
       const [rows] = await conn.execute(
-        'SELECT * FROM user WHERE userId = ?',
-        [userId]
+        'SELECT * FROM user WHERE mail = ?',
+        [email]
       );
       if (rows.length === 0) {
-        return res.status(400).json({ message: 'User ID o password non validi' });
+        return res.status(400).json({ message: 'Email o password non validi' });
       }
 
       const user = rows[0];
@@ -99,16 +99,17 @@ app.post('/api/login', async (req, res) => {
       // Confronta la password inserita con l'hash salvato nel DB.
       const passwordMatch = await bcrypt.compare(password, user.password);
       if (!passwordMatch) {
-        return res.status(400).json({ message: 'User ID o password non validi' });
+        return res.status(400).json({ message: 'Email o password non validi' });
       }
 
       return res.json({
         message: 'Login riuscito',
         user: {
-          userId: user.userId,
+          nome: user.userId,
           email: user.mail,
         },
       });
+      console.log('Utente loggato:', user.userId, '(', user.mail, ')');
     } finally {
       conn.release();
     }

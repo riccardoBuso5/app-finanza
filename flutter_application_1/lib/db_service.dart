@@ -141,12 +141,12 @@ class DbService {
   // Autentica un utente (login)
   // Restituisce i dati utente se il login riesce, altrimenti null.
   static Future<Map<String, dynamic>?> loginUser({
-    required String userId,
+    required String email,
     required String password,
   }) async {
     try {
       final response = await _postRequest('/login', {
-        'userId': userId,
+        'email': email,
         'password': password,
       });
 

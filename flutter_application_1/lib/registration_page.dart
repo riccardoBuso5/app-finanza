@@ -35,7 +35,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
     if (_formKey.currentState!.validate()) {
       // Stampa in console i dati inseriti dall'utente
       print('--- Dati Registrazione ---');
-      print('User ID: ${_nameController.text}');
+      print('Nome utente: ${_nameController.text}');
       print('Email: ${_emailController.text}');
       print('Password: ${_passwordController.text}');
       print('--------------------------');
@@ -159,13 +159,13 @@ class _RegistrationPageState extends State<RegistrationPage> {
                           TextFormField(
                             controller: _nameController,
                             decoration: const InputDecoration(
-                              labelText: 'User ID',
+                              labelText: 'Nome utente (Plus)',
                               border: OutlineInputBorder(),
                               prefixIcon: Icon(Icons.person),
                             ),
                             validator: (value) {
                               if (value == null || value.isEmpty) {
-                                return 'Inserisci il tuo User ID';
+                                return 'Inserisci il nome utente';
                               }
                               return null;
                             },

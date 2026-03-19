@@ -16,7 +16,7 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   // Controller per gestire i dati inseriti nei campi di testo
-  final _userIdController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
   // Opzioni/UI state per la gestione delle credenziali salvate localmente.
@@ -35,7 +35,7 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _loadSavedCredentials() async {
     final prefs = await SharedPreferences.getInstance();
-    final savedUserId = prefs.getString('saved_userId');
+    final savedEmail = prefs.getString('saved_email');
     final savedPassword = prefs.getString('saved_password');
     final savedRemember = prefs.getBool('remember_me') ?? false;
 
@@ -46,7 +46,7 @@ class _LoginPageState extends State<LoginPage> {
     setState(() {
       _ricordami = savedRemember;
       if (savedRemember) {
-        _userIdController.text = savedUserId ?? '';
+        _emailController.text = savedEmail ?? '';
         _passwordController.text = savedPassword ?? '';
       }
       _isLoadingSavedCredentials = false;
@@ -57,11 +57,11 @@ class _LoginPageState extends State<LoginPage> {
     final prefs = await SharedPreferences.getInstance();
     if (_ricordami) {
       await prefs.setBool('remember_me', true);
-      await prefs.setString('saved_userId', _userIdController.text.trim());
+      await prefs.setString('saved_email', _emailController.text.trim());
       await prefs.setString('saved_password', _passwordController.text);
     } else {
       await prefs.setBool('remember_me', false);
-      await prefs.remove('saved_userId');
+      await prefs.remove('saved_email');
       await prefs.remove('saved_password');
     }
   }
@@ -69,7 +69,7 @@ class _LoginPageState extends State<LoginPage> {
   // È importante rilasciare le risorse dei controller quando il widget viene rimosso
   @override
   void dispose() {
-    _userIdController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -80,7 +80,7 @@ class _LoginPageState extends State<LoginPage> {
     if (_formKey.currentState!.validate()) {
       // Stampa in console i dati inseriti dall'utente
       print('--- Dati Login ---');
-      print('User ID: ${_userIdController.text}');
+      print('Email: ${_emailController.text}');
       print('Password: ${_passwordController.text}');
       print('------------------');
 
@@ -91,33 +91,42 @@ class _LoginPageState extends State<LoginPage> {
 
       // Chiama il backend per autenticare l'utente.
       final user = await DbService.loginUser(
-        userId: _userIdController.text,
-        password: _passwordController.text,
+        email: _emailController.text,
+        password: _passwordController.text
       );
 
+ 
       if (mounted) {
         if (user != null) {
           await _saveCredentialsIfNeeded();
 
+          final nomeRaw = user['nome']?.toString().trim();
+          final nome = (nomeRaw != null && nomeRaw.isNotEmpty) ? nomeRaw : 'Utente';
+
+              
+          final email = user['email']?.toString().trim().isNotEmpty == true
+              ? user['email'].toString()
+              : _emailController.text.trim();
+
           // Login riuscito
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Benvenuto ${user['userId']}!')),
+            SnackBar(content: Text('Benvenuto $nome!')),
           );
-          print('Utente loggato: ${user['userId']} (${user['email']})');
+          print('Utente loggato: $nome ($email)');
           
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
               builder: (_) => HomePage(
-                userId: user['userId'].toString(),
-                email: user['email'].toString(),
+                email: email,
+                name: nome,
               ),
             ),
           );
         } else {
           // Login fallito
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('User ID o password non validi')),
+            const SnackBar(content: Text('Email o password non validi')),
           );
         }
       }
@@ -217,16 +226,19 @@ class _LoginPageState extends State<LoginPage> {
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 TextFormField(
-                                  controller: _userIdController,
+                                  controller: _emailController,
                                   decoration: const InputDecoration(
-                                    labelText: 'User ID',
+                                    labelText: 'Email',
                                     border: OutlineInputBorder(),
-                                    prefixIcon: Icon(Icons.person),
+                                    prefixIcon: Icon(Icons.email),
                                   ),
-                                  keyboardType: TextInputType.text,
+                                  keyboardType: TextInputType.emailAddress,
                                   validator: (value) {
                                     if (value == null || value.isEmpty) {
-                                      return 'Inserisci il tuo User ID';
+                                      return 'Inserisci la tua email';
+                                    }
+                                    if (!value.contains('@')) {
+                                      return 'Inserisci una email valida';
                                     }
                                     return null;
                                   },

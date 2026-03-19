@@ -7,18 +7,19 @@ import 'theme_controller.dart';
 
 // Dashboard principale dopo il login.
 class HomePage extends StatefulWidget {
-  // userId ed email sono valori passati dal login dopo autenticazione riuscita.
-  // Sono final perché non devono cambiare durante il ciclo di vita del widget.
-  final String userId;
+  // Email utente passata dal login dopo autenticazione riuscita.
+  // E' final perche non deve cambiare durante il ciclo di vita del widget.
   final String email;
+  final String name;
+
 
   // Costruttore const:
   // - migliora le performance quando possibile
-  // - richiede obbligatoriamente userId ed email tramite `required`
+  // - richiede obbligatoriamente email tramite `required`
   const HomePage({
     super.key,
-    required this.userId,
     required this.email,
+    required this.name,
   });
 
   @override
@@ -33,7 +34,6 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    // Primo caricamento dei dati da mostrare nella dashboard.
     _caricaUltimeSpese();
   }
 
@@ -133,7 +133,7 @@ class _HomePageState extends State<HomePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Ciao ${widget.userId}',
+                      'Ciao ${widget.name}, benvenuto!',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 24,
