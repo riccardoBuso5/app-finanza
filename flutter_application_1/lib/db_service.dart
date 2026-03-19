@@ -34,11 +34,13 @@ class EntrataItem {
   final int identrate;
   final String nome;
   final int prezzo;
+  final DateTime? data;
 
   const EntrataItem({
     required this.identrate,
     required this.nome,
     required this.prezzo,
+    required this.data,
   });
 }
 
@@ -130,6 +132,77 @@ class DbService {
       return data ?? <String, dynamic>{};
     } catch (e) {
       print('Errore durante la richiesta a $endpoint: $e');
+      rethrow;
+    }
+  }
+
+  // Metodo helper per fare richieste DELETE
+  static Future<Map<String, dynamic>> _deleteRequest(String endpoint) async {
+    try {
+      final url = Uri.parse('$_baseUrl$endpoint');
+      final response = await http.delete(url);
+
+      Map<String, dynamic>? data;
+      if (response.body.isNotEmpty) {
+        try {
+          data = jsonDecode(response.body) as Map<String, dynamic>;
+        } catch (_) {
+          final preview = response.body.length > 120
+              ? '${response.body.substring(0, 120)}...'
+              : response.body;
+          throw Exception(
+            'Risposta non JSON (status ${response.statusCode}): $preview',
+          );
+        }
+      }
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception(data?['message'] ?? 'Errore HTTP ${response.statusCode}');
+      }
+
+      return data ?? <String, dynamic>{};
+    } catch (e) {
+      print('Errore durante la richiesta DELETE a $endpoint: $e');
+      rethrow;
+    }
+  }
+
+  // Metodo helper per fare richieste PUT
+  static Future<Map<String, dynamic>> _putRequest(
+    String endpoint,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final url = Uri.parse('$_baseUrl$endpoint');
+      final response = await http.put(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(body),
+      );
+
+      Map<String, dynamic>? data;
+      if (response.body.isNotEmpty) {
+        try {
+          data = jsonDecode(response.body) as Map<String, dynamic>;
+        } catch (_) {
+          final preview = response.body.length > 120
+              ? '${response.body.substring(0, 120)}...'
+              : response.body;
+          throw Exception(
+            'Risposta non JSON (status ${response.statusCode}): $preview',
+          );
+        }
+      }
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception(data?['message'] ?? 'Errore HTTP ${response.statusCode}');
+      }
+
+      return data ?? <String, dynamic>{};
+    } catch (e) {
+      print('Errore durante la richiesta PUT a $endpoint: $e');
       rethrow;
     }
   }
@@ -227,23 +300,90 @@ class DbService {
     }
   }
 
+  static Future<String?> updateCategoria({
+    required int idcategoria,
+    required String nome,
+  }) async {
+    try {
+      await _putRequest('/categorie/$idcategoria', {
+        'nome': nome,
+      });
+      return null;
+    } catch (e) {
+      final message = e.toString().replaceFirst('Exception: ', '');
+      print('Errore durante l\'aggiornamento della categoria: $message');
+      return message;
+    }
+  }
+
   // Inserisce una nuova entrata nel database.
   // Restituisce null se ok, oppure il messaggio di errore in caso di problemi.
   static Future<String?> createEntrata({
     required String nome,
+    String? giorno,
     required int prezzo,
   }) async {
     try {
-      final response = await _postRequest('/entrate', {
+      final body = <String, dynamic>{
         'nome': nome,
         'prezzo': prezzo,
-      });
+      };
+
+      if (giorno != null && giorno.trim().isNotEmpty) {
+        body['giorno'] = giorno;
+        body['data'] = giorno;
+      }
+
+      final response = await _postRequest('/entrate', body);
 
       print('Entrata salvata: $response');
       return null;
     } catch (e) {
       final message = e.toString().replaceFirst('Exception: ', '');
       print('Errore durante il salvataggio dell\'entrata: $message');
+      return message;
+    }
+  }
+
+  static Future<String?> updateSpesa({
+    required int idspese,
+    required String nome,
+    required String giorno,
+    required int prezzo,
+    required int idcategoria,
+  }) async {
+    try {
+      await _putRequest('/spese/$idspese', {
+        'nome': nome,
+        'giorno': giorno,
+        'prezzo': prezzo,
+        'idcategoria': idcategoria,
+      });
+      return null;
+    } catch (e) {
+      final message = e.toString().replaceFirst('Exception: ', '');
+      print('Errore durante l\'aggiornamento della spesa: $message');
+      return message;
+    }
+  }
+
+  static Future<String?> updateEntrata({
+    required int identrate,
+    required String nome,
+    required String giorno,
+    required int prezzo,
+  }) async {
+    try {
+      await _putRequest('/entrate/$identrate', {
+        'nome': nome,
+        'prezzo': prezzo,
+        'giorno': giorno,
+        'data': giorno,
+      });
+      return null;
+    } catch (e) {
+      final message = e.toString().replaceFirst('Exception: ', '');
+      print('Errore durante l\'aggiornamento dell\'entrata: $message');
       return message;
     }
   }
@@ -282,7 +422,21 @@ class DbService {
             final idspese = int.tryParse(item['idspese']?.toString() ?? '');
             final nome = item['nome']?.toString() ?? '';
             final giornoRaw = item['giorno']?.toString() ?? '';
-            final giorno = DateTime.tryParse(giornoRaw);
+            DateTime? giorno;
+            if (giornoRaw.isNotEmpty) {
+              final isoDatePrefix =
+                  RegExp(r'^\d{4}-\d{2}-\d{2}').firstMatch(giornoRaw)?.group(0);
+              if (isoDatePrefix != null) {
+                final parts = isoDatePrefix.split('-');
+                giorno = DateTime(
+                  int.parse(parts[0]),
+                  int.parse(parts[1]),
+                  int.parse(parts[2]),
+                );
+              } else {
+                giorno = DateTime.tryParse(giornoRaw)?.toLocal();
+              }
+            }
             final prezzo = int.tryParse(item['prezzo']?.toString() ?? '');
             final idcategoria = int.tryParse(item['idcategoria']?.toString() ?? '');
             final categoriaNome = item['categoria_nome']?.toString() ?? 'N/A';
@@ -319,6 +473,20 @@ class DbService {
             final identrate = int.tryParse(item['identrate']?.toString() ?? '');
             final nome = item['nome']?.toString() ?? '';
             final prezzo = int.tryParse(item['prezzo']?.toString() ?? '');
+            final dataRaw = (item['data'] ?? item['giorno'])?.toString() ?? '';
+            DateTime? data;
+            if (dataRaw.isNotEmpty) {
+              if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(dataRaw)) {
+                final parts = dataRaw.split('-');
+                data = DateTime(
+                  int.parse(parts[0]),
+                  int.parse(parts[1]),
+                  int.parse(parts[2]),
+                );
+              } else {
+                data = DateTime.tryParse(dataRaw)?.toLocal();
+              }
+            }
 
             if (identrate == null || nome.isEmpty || prezzo == null) {
               return null;
@@ -328,6 +496,7 @@ class DbService {
               identrate: identrate,
               nome: nome,
               prezzo: prezzo,
+              data: data,
             );
           })
           .whereType<EntrataItem>()
@@ -335,6 +504,39 @@ class DbService {
     } catch (e) {
       print('Errore caricamento ultime entrate: $e');
       return <EntrataItem>[];
+    }
+  }
+
+  static Future<String?> deleteSpesa(int idspese) async {
+    try {
+      await _deleteRequest('/spese/$idspese');
+      return null;
+    } catch (e) {
+      final message = e.toString().replaceFirst('Exception: ', '');
+      print('Errore durante la cancellazione della spesa: $message');
+      return message;
+    }
+  }
+
+  static Future<String?> deleteEntrata(int identrate) async {
+    try {
+      await _deleteRequest('/entrate/$identrate');
+      return null;
+    } catch (e) {
+      final message = e.toString().replaceFirst('Exception: ', '');
+      print('Errore durante la cancellazione dell\'entrata: $message');
+      return message;
+    }
+  }
+
+  static Future<String?> deleteCategoria(int idcategoria) async {
+    try {
+      await _deleteRequest('/categorie/$idcategoria');
+      return null;
+    } catch (e) {
+      final message = e.toString().replaceFirst('Exception: ', '');
+      print('Errore durante la cancellazione della categoria: $message');
+      return message;
     }
   }
 }

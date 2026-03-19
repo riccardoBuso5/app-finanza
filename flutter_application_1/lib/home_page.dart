@@ -3,6 +3,7 @@ import 'login_page.dart';
 import 'spese_form_page.dart';
 import 'categorie_form_page.dart';
 import 'entrate_form_page.dart';
+import 'bilancio_mensile.dart';
 import 'db_service.dart';
 import 'theme_controller.dart';
 
@@ -13,15 +14,10 @@ class HomePage extends StatefulWidget {
   final String email;
   final String name;
 
-
   // Costruttore const:
   // - migliora le performance quando possibile
   // - richiede obbligatoriamente email tramite `required`
-  const HomePage({
-    super.key,
-    required this.email,
-    required this.name,
-  });
+  const HomePage({super.key, required this.email, required this.name});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -73,18 +69,114 @@ class _HomePageState extends State<HomePage> {
     return 'EUR ${prezzo.toString()}';
   }
 
+  Future<bool> _showDeleteConfirmDialog({
+    required String titolo,
+    required String messaggio,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(titolo),
+          content: Text(messaggio),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Annulla'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFB00020),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Cancella'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return result ?? false;
+  }
+
+  Future<void> _deleteSpesa(SpesaItem spesa) async {
+    final confirmed = await _showDeleteConfirmDialog(
+      titolo: 'Cancella spesa',
+      messaggio: 'Vuoi cancellare "${spesa.nome}"?',
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    final error = await DbService.deleteSpesa(spesa.idspese);
+    if (!mounted) {
+      return;
+    }
+
+    if (error != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Errore: $error')));
+      return;
+    }
+
+    await _caricaUltimeSpese();
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Spesa cancellata')));
+  }
+
+  Future<void> _deleteEntrata(EntrataItem entrata) async {
+    final confirmed = await _showDeleteConfirmDialog(
+      titolo: 'Cancella entrata',
+      messaggio: 'Vuoi cancellare "${entrata.nome}"?',
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    final error = await DbService.deleteEntrata(entrata.identrate);
+    if (!mounted) {
+      return;
+    }
+
+    if (error != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Errore: $error')));
+      return;
+    }
+
+    await _caricaUltimeSpese();
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Entrata cancellata')));
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final appBarColor = isDark ? const Color(0xFF0D2538) : const Color(0xFF114B5F);
+    final appBarColor = isDark
+        ? const Color(0xFF0D2538)
+        : const Color(0xFF114B5F);
     final bgTop = isDark ? const Color(0xFF0F1720) : const Color(0xFFF5F7FA);
     final bgBottom = isDark ? const Color(0xFF1A2330) : const Color(0xFFE8EEF2);
     final heroA = isDark ? const Color(0xFF0E7490) : const Color(0xFF114B5F);
     final heroB = isDark ? const Color(0xFF155E75) : const Color(0xFF1A759F);
     final surfaceColor = isDark ? const Color(0xFF1C2733) : Colors.white;
-    final titleColor = isDark ? Colors.white : const Color(0xFF1D3557);
-    final amountColor = isDark ? const Color(0xFF7BDFF2) : const Color(0xFF114B5F);
+    final amountColor = isDark
+        ? const Color(0xFF7BDFF2)
+        : const Color(0xFF114B5F);
     const maxSpeseWidth = 960.0;
     const maxLogoutWidth = 320.0;
 
@@ -165,10 +257,11 @@ class _HomePageState extends State<HomePage> {
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () async {
-                        // Torniamo qui dopo il salvataggio e aggiorniamo la lista.
                         await Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => const SpeseFormPage()),
+                          MaterialPageRoute(
+                            builder: (_) => const SpeseFormPage(),
+                          ),
                         );
                         _caricaUltimeSpese();
                       },
@@ -185,10 +278,11 @@ class _HomePageState extends State<HomePage> {
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () async {
-                        // Torniamo qui dopo eventuali modifiche alle categorie.
                         await Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => const CategorieFormPage()),
+                          MaterialPageRoute(
+                            builder: (_) => const CategorieFormPage(),
+                          ),
                         );
                         _caricaUltimeSpese();
                       },
@@ -198,30 +292,54 @@ class _HomePageState extends State<HomePage> {
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         backgroundColor: const Color(0xFF457B9D),
                         foregroundColor: Colors.white,
-                        
                       ),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const EntrateFormPage()),
-                    );
-                  },
-                  icon: const Icon(Icons.savings),
-                  label: const Text('Nuova entrata'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    backgroundColor: const Color(0xFF4CAF50),
-                    foregroundColor: Colors.white,
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const EntrateFormPage(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.savings),
+                      label: const Text('Nuova entrata'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        backgroundColor: const Color(0xFF4CAF50),
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const BilancioMensilePage(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.pie_chart_outline),
+                      label: const Text('Bilancio'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        backgroundColor: const Color(0xFF3D5A80),
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 20),
               Align(
@@ -272,16 +390,36 @@ class _HomePageState extends State<HomePage> {
                             child: ListTile(
                               title: Text(
                                 spesa.nome,
-                                style: const TextStyle(fontWeight: FontWeight.w600),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                               subtitle: Text(
                                 '${spesa.categoriaNome} • ${_formatDate(spesa.giorno)}',
                               ),
-                              trailing: Text(
-                                _formatPrice(spesa.prezzo),
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  color: amountColor,
+                              trailing: SizedBox(
+                                width: 122,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        _formatPrice(spesa.prezzo),
+                                        textAlign: TextAlign.end,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          color: amountColor,
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      onPressed: () => _deleteSpesa(spesa),
+                                      icon: const Icon(Icons.close),
+                                      color: const Color(0xFFB00020),
+                                      tooltip: 'Cancella questa voce',
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -329,14 +467,38 @@ class _HomePageState extends State<HomePage> {
                             child: ListTile(
                               title: Text(
                                 entrata.nome,
-                                style: const TextStyle(fontWeight: FontWeight.w600),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                              subtitle: const Text('Entrata'),
-                              trailing: Text(
-                                _formatPrice(entrata.prezzo),
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  color: amountColor,
+                              subtitle: Text(
+                                entrata.data == null
+                                    ? 'Entrata'
+                                    : 'Entrata • ${_formatDate(entrata.data!)}',
+                              ),
+                              trailing: SizedBox(
+                                width: 122,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        _formatPrice(entrata.prezzo),
+                                        textAlign: TextAlign.end,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          color: amountColor,
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      onPressed: () => _deleteEntrata(entrata),
+                                      icon: const Icon(Icons.close),
+                                      color: const Color(0xFFB00020),
+                                      tooltip: 'Cancella questa voce',
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
