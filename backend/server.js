@@ -231,6 +231,50 @@ app.post('/api/spese', async (req, res) => {
   }
 });
 
+// Endpoint creazione entrata
+app.post('/api/entrate', async (req, res) => {
+  try {
+    const { nome, prezzo } = req.body;
+
+    if (!nome || prezzo === undefined || prezzo === null) {
+      return res.status(400).json({ message: 'Compila tutti i campi dell\'entrata' });
+    }
+
+    const prezzoInt = Number(prezzo);
+    if (!Number.isInteger(prezzoInt) || prezzoInt < 0) {
+      return res.status(400).json({ message: 'Il prezzo deve essere un intero positivo' });
+    }
+
+    const conn = await pool.getConnection();
+    try {
+      const [nextIdRows] = await conn.execute(
+        'SELECT COALESCE(MAX(identrate), 0) + 1 AS nextId FROM entrate'
+      );
+      const identrate = Number(nextIdRows[0].nextId);
+
+      const [result] = await conn.execute(
+        'INSERT INTO entrate (identrate, nome, prezzo) VALUES (?, ?, ?)',
+        [identrate, nome.trim(), prezzoInt]
+      );
+
+      return res.status(201).json({
+        message: 'Entrata salvata con successo',
+        identrate: result.insertId || identrate,
+        entrata: {
+          identrate: result.insertId || identrate,
+          nome: nome.trim(),
+          prezzo: prezzoInt,
+        },
+      });
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    console.error('Errore creazione entrata:', error);
+    return res.status(500).json({ message: 'Errore server: ' + error.message });
+  }
+});
+
 // Endpoint ultime spese per Home
 app.get('/api/spese', async (req, res) => {
   try {
@@ -256,6 +300,37 @@ app.get('/api/spese', async (req, res) => {
     }
   } catch (error) {
     console.error('Errore lettura spese:', error);
+    return res.status(500).json({ message: 'Errore server: ' + error.message });
+  }
+});
+
+app.get('/api/entrate', async (req, res) => {
+  try {
+    const requestedLimit = Number(req.query.limit);
+    // Limite protetto per evitare richieste troppo pesanti.
+    const limit = Number.isInteger(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 100)
+      : 10;
+
+    const conn = await pool.getConnection();
+    try {
+      const [rows] = await conn.query(
+        `SELECT e.identrate, e.nome, e.prezzo
+         FROM entrate e
+         ORDER BY e.identrate DESC
+         LIMIT ${limit}`
+      );
+
+      return res.json({
+        message: 'Entrate caricate con successo',
+        total: rows.length,
+        entrate: rows,
+      });
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    console.error('Errore lettura entrate:', error);
     return res.status(500).json({ message: 'Errore server: ' + error.message });
   }
 });

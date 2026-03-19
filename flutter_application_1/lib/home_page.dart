@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'login_page.dart';
 import 'spese_form_page.dart';
 import 'categorie_form_page.dart';
+import 'entrate_form_page.dart';
 import 'db_service.dart';
 import 'theme_controller.dart';
 
@@ -29,6 +30,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   // Stato locale: lista spese recenti e flag di caricamento.
   List<SpesaItem> _ultimeSpese = <SpesaItem>[];
+  List<EntrataItem> _ultimeEntrate = <EntrataItem>[];
   bool _isLoading = true;
 
   @override
@@ -42,7 +44,13 @@ class _HomePageState extends State<HomePage> {
       _isLoading = true;
     });
 
-    final spese = await DbService.fetchUltimeSpese(limit: 15);
+    final results = await Future.wait<dynamic>([
+      DbService.fetchUltimeSpese(limit: 15),
+      DbService.fetchUltimeEntrate(limit: 15),
+    ]);
+
+    final spese = results[0] as List<SpesaItem>;
+    final entrate = results[1] as List<EntrataItem>;
 
     if (!mounted) {
       return;
@@ -50,6 +58,7 @@ class _HomePageState extends State<HomePage> {
 
     setState(() {
       _ultimeSpese = spese;
+      _ultimeEntrate = entrate;
       _isLoading = false;
     });
   }
@@ -76,6 +85,8 @@ class _HomePageState extends State<HomePage> {
     final surfaceColor = isDark ? const Color(0xFF1C2733) : Colors.white;
     final titleColor = isDark ? Colors.white : const Color(0xFF1D3557);
     final amountColor = isDark ? const Color(0xFF7BDFF2) : const Color(0xFF114B5F);
+    const maxSpeseWidth = 960.0;
+    const maxLogoutWidth = 320.0;
 
     return Scaffold(
       appBar: AppBar(
@@ -187,78 +198,173 @@ class _HomePageState extends State<HomePage> {
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         backgroundColor: const Color(0xFF457B9D),
                         foregroundColor: Colors.white,
+                        
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
-              const Text(
-                'Ultime spese',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1D3557),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const EntrateFormPage()),
+                    );
+                  },
+                  icon: const Icon(Icons.savings),
+                  label: const Text('Nuova entrata'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    backgroundColor: const Color(0xFF4CAF50),
+                    foregroundColor: Colors.white,
+                  ),
                 ),
               ),
-              const SizedBox(height: 10),
-              if (_isLoading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (_ultimeSpese.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: surfaceColor,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text('Nessuna spesa trovata.'),
-                )
-              else
-                ..._ultimeSpese.map(
-                  (spesa) => Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    decoration: BoxDecoration(
-                      color: surfaceColor,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.06),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: ListTile(
-                      title: Text(
-                        spesa.nome,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      subtitle: Text(
-                        '${spesa.categoriaNome} • ${_formatDate(spesa.giorno)}',
-                      ),
-                      trailing: Text(
-                        _formatPrice(spesa.prezzo),
+              const SizedBox(height: 20),
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: maxSpeseWidth),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Ultime spese',
                         style: TextStyle(
+                          fontSize: 20,
                           fontWeight: FontWeight.w700,
-                          color: amountColor,
+                          color: Color(0xFF1D3557),
                         ),
                       ),
+                      const SizedBox(height: 10),
+                      if (_isLoading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (_ultimeSpese.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: surfaceColor,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Text('Nessuna spesa trovata.'),
+                        )
+                      else
+                        ..._ultimeSpese.map(
+                          (spesa) => Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            decoration: BoxDecoration(
+                              color: surfaceColor,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.06),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: ListTile(
+                              title: Text(
+                                spesa.nome,
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: Text(
+                                '${spesa.categoriaNome} • ${_formatDate(spesa.giorno)}',
+                              ),
+                              trailing: Text(
+                                _formatPrice(spesa.prezzo),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: amountColor,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Ultime entrate',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1D3557),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      if (_isLoading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (_ultimeEntrate.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: surfaceColor,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Text('Nessuna entrata trovata.'),
+                        )
+                      else
+                        ..._ultimeEntrate.map(
+                          (entrata) => Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            decoration: BoxDecoration(
+                              color: surfaceColor,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.06),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: ListTile(
+                              title: Text(
+                                entrata.nome,
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              subtitle: const Text('Entrata'),
+                              trailing: Text(
+                                _formatPrice(entrata.prezzo),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: amountColor,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: maxLogoutWidth),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (_) => const LoginPage()),
+                        );
+                      },
+                      icon: const Icon(Icons.logout),
+                      label: const Text('Logout'),
                     ),
                   ),
                 ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (_) => const LoginPage()),
-                  );
-                },
-                icon: const Icon(Icons.logout),
-                label: const Text('Logout'),
               ),
             ],
           ),

@@ -36,7 +36,6 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _loadSavedCredentials() async {
     final prefs = await SharedPreferences.getInstance();
     final savedEmail = prefs.getString('saved_email');
-    final savedPassword = prefs.getString('saved_password');
     final savedRemember = prefs.getBool('remember_me') ?? false;
 
     if (!mounted) {
@@ -47,10 +46,12 @@ class _LoginPageState extends State<LoginPage> {
       _ricordami = savedRemember;
       if (savedRemember) {
         _emailController.text = savedEmail ?? '';
-        _passwordController.text = savedPassword ?? '';
       }
       _isLoadingSavedCredentials = false;
     });
+
+    // Hardening: rimuove eventuali password in chiaro salvate da versioni precedenti.
+    await prefs.remove('saved_password');
   }
 
   Future<void> _saveCredentialsIfNeeded() async {
@@ -58,7 +59,7 @@ class _LoginPageState extends State<LoginPage> {
     if (_ricordami) {
       await prefs.setBool('remember_me', true);
       await prefs.setString('saved_email', _emailController.text.trim());
-      await prefs.setString('saved_password', _passwordController.text);
+      await prefs.remove('saved_password');
     } else {
       await prefs.setBool('remember_me', false);
       await prefs.remove('saved_email');
@@ -78,12 +79,6 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _login() async {
     // Controlla se tutti i campi del modulo sono validi
     if (_formKey.currentState!.validate()) {
-      // Stampa in console i dati inseriti dall'utente
-      print('--- Dati Login ---');
-      print('Email: ${_emailController.text}');
-      print('Password: ${_passwordController.text}');
-      print('------------------');
-
       // Mostra messaggio di attesa
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Tentativo di login in corso...')),

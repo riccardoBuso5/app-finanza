@@ -33,13 +33,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
   // Metodo chiamato alla pressione del tasto "Registrati"
   void _register() async {
     if (_formKey.currentState!.validate()) {
-      // Stampa in console i dati inseriti dall'utente
-      print('--- Dati Registrazione ---');
-      print('Nome utente: ${_nameController.text}');
-      print('Email: ${_emailController.text}');
-      print('Password: ${_passwordController.text}');
-      print('--------------------------');
-
       // Mostra messaggio di attesa
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Registrazione in corso...')),

@@ -1,6 +1,6 @@
 # App Finanza
 
-Applicazione per la gestione delle spese personali, pensata per tenere traccia in modo semplice di uscite e categorie.
+Applicazione per la gestione della finanza personale, pensata per tenere traccia in modo semplice di spese, entrate e categorie.
 
 Il progetto e diviso in due parti:
 - un'app Flutter (interfaccia utente)
@@ -14,7 +14,8 @@ In particolare permette di:
 - creare un account ed effettuare login
 - definire categorie personalizzate (es. Spesa, Trasporti, Tempo libero)
 - registrare una spesa con nome, data, prezzo e categoria
-- visualizzare le ultime spese salvate
+- registrare un'entrata con nome e prezzo
+- visualizzare ultime spese e ultime entrate salvate
 
 Obiettivo: avere un diario economico minimale, chiaro e facilmente estendibile.
 
@@ -24,7 +25,9 @@ Obiettivo: avere un diario economico minimale, chiaro e facilmente estendibile.
 - Login con verifica password hashata
 - Gestione catalogo categorie
 - Inserimento spese con validazioni lato backend
+- Inserimento entrate con validazioni lato backend
 - Lettura lista spese ordinate per data decrescente
+- Lettura lista entrate ordinate per id decrescente
 - Endpoint health check per verificare che il server sia operativo
 
 ## Architettura
@@ -33,7 +36,7 @@ Obiettivo: avere un diario economico minimale, chiaro e facilmente estendibile.
 
 Il frontend si occupa di:
 - autenticazione utente
-- form di inserimento categorie e spese
+- form di inserimento categorie, spese e entrate
 - visualizzazione dati nella home
 - gestione tema (chiaro/scuro)
 
@@ -55,6 +58,7 @@ Schema logico minimo:
 - `user`: credenziali utente
 - `categorie`: elenco categorie personalizzate
 - `spese`: movimenti di spesa associati a una categoria
+- `entrate`: movimenti di entrata
 
 ## Stack tecnologico
 
@@ -82,7 +86,8 @@ app-finanza/
 2. Effettua login con `userId` e password.
 3. Inserisce una o piu categorie personali.
 4. Registra le spese selezionando categoria e data.
-5. Nella home vede le ultime spese salvate.
+5. Registra eventuali entrate.
+6. Nella home vede ultime spese e ultime entrate.
 
 ## Setup rapido
 
@@ -111,6 +116,10 @@ PORT=3002
 ```
 
 Nota: in [flutter_application_1/lib/db_service.dart](flutter_application_1/lib/db_service.dart) l'API base e `http://localhost:3002/api`, quindi `PORT` deve essere `3002` (oppure aggiorna il base URL lato Flutter).
+
+Nota piattaforme:
+- Web/Desktop: `http://localhost:3002/api`
+- Android emulator: `http://10.0.2.2:3002/api`
 
 ### 2) Database
 
@@ -142,9 +151,39 @@ CREATE TABLE IF NOT EXISTS spese (
     ON UPDATE CASCADE
     ON DELETE RESTRICT
 );
+
+CREATE TABLE IF NOT EXISTS entrate (
+  identrate INT PRIMARY KEY,
+  nome VARCHAR(45) NOT NULL,
+  prezzo INT NOT NULL
+);
 ```
 
+Nota: la tabella `entrate` non usa `AUTO_INCREMENT` in questo progetto; l'ID viene calcolato lato backend.
+
 ### 3) Avvio servizi
+
+Metodo consigliato (avvio parallelo backend + Flutter):
+
+```powershell
+.\run_flutter_clean_and_start.ps1 -Device chrome
+```
+
+Parametri script:
+- `-FlutterProjectPath` (default: `flutter_application_1`)
+- `-SkipPubGet` (switch)
+- `-Device` (default: `chrome`, supporta anche `emulator` o un id device Flutter)
+
+Esempi:
+
+```powershell
+.\run_flutter_clean_and_start.ps1
+.\run_flutter_clean_and_start.ps1 -SkipPubGet
+.\run_flutter_clean_and_start.ps1 -Device emulator
+.\run_flutter_clean_and_start.ps1 -Device windows
+```
+
+Avvio manuale (alternativa):
 
 Avvia backend:
 
@@ -169,13 +208,17 @@ flutter run -d chrome
 - `GET /api/categorie`
 - `POST /api/spese`
 - `GET /api/spese?limit=10`
+- `POST /api/entrate`
+- `GET /api/entrate?limit=10`
 - `GET /api/health`
 
 ## Sicurezza e validazioni
 
 - Password mai salvate in chiaro: vengono hashate con `bcryptjs`.
+- Password non persistite in chiaro lato app (viene salvata solo email se "ricordami" attivo).
 - Controlli backend su campi obbligatori e formato dati (es. data e prezzo).
 - Pool di connessioni MySQL con rilascio sicuro delle connessioni.
+- In produzione usare HTTPS per proteggere le credenziali in transito.
 
 ## Troubleshooting
 
@@ -183,6 +226,8 @@ flutter run -d chrome
   verifica `npm install`, file `.env` e credenziali DB.
 - Flutter non raggiunge il backend:
   verifica che porta backend e `_baseUrl` coincidano.
+- `Cannot GET /api/entrate` o risposta HTML 404:
+  backend non aggiornato o istanza vecchia ancora attiva; riavvia backend e riprova.
 - Errori login/registrazione:
   controlla che le tabelle esistano e che il DB sia raggiungibile.
 - CORS o rete su browser:

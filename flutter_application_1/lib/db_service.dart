@@ -1,5 +1,6 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 
 // Modello categoria ricevuto dal backend.
 class CategoriaItem {
@@ -28,14 +29,35 @@ class SpesaItem {
   });
 }
 
+// Modello entrata usato nella dashboard/home.
+class EntrataItem {
+  final int identrate;
+  final String nome;
+  final int prezzo;
+
+  const EntrataItem({
+    required this.identrate,
+    required this.nome,
+    required this.prezzo,
+  });
+}
+
 // Servizio per comunicare con il backend API Node.js/Express
 class DbService {
   // URL base del backend.
-  // Nota: su emulatori Android in genere si usa 10.0.2.2 al posto di localhost.
+  // Android emulator -> 10.0.2.2
+  // Web/Desktop -> localhost
+  static String get _baseUrl {
+    if (kIsWeb) {
+      return 'http://localhost:3002/api';
+    }
 
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:3002/api';
+    }
 
-  //static const String _baseUrl = 'http://10.0.2.2:3002/api';
-  static const String _baseUrl = 'http://localhost:3002/api'; // web/desktop
+    return 'http://localhost:3002/api';
+  }
 
 
   // Metodo helper per fare richieste POST
@@ -205,6 +227,27 @@ class DbService {
     }
   }
 
+  // Inserisce una nuova entrata nel database.
+  // Restituisce null se ok, oppure il messaggio di errore in caso di problemi.
+  static Future<String?> createEntrata({
+    required String nome,
+    required int prezzo,
+  }) async {
+    try {
+      final response = await _postRequest('/entrate', {
+        'nome': nome,
+        'prezzo': prezzo,
+      });
+
+      print('Entrata salvata: $response');
+      return null;
+    } catch (e) {
+      final message = e.toString().replaceFirst('Exception: ', '');
+      print('Errore durante il salvataggio dell\'entrata: $message');
+      return message;
+    }
+  }
+
   // Restituisce la lista dei nomi categoria per il combobox nella pagina spese.
   static Future<List<CategoriaItem>> fetchCategorie() async {
     try {
@@ -263,6 +306,35 @@ class DbService {
     } catch (e) {
       print('Errore caricamento ultime spese: $e');
       return <SpesaItem>[];
+    }
+  }
+
+  static Future<List<EntrataItem>> fetchUltimeEntrate({int limit = 10}) async {
+    try {
+      final response = await _getRequest('/entrate?limit=$limit');
+      final rawList = response['entrate'] as List<dynamic>? ?? <dynamic>[];
+      return rawList
+          .map((item) => item as Map<String, dynamic>)
+          .map((item) {
+            final identrate = int.tryParse(item['identrate']?.toString() ?? '');
+            final nome = item['nome']?.toString() ?? '';
+            final prezzo = int.tryParse(item['prezzo']?.toString() ?? '');
+
+            if (identrate == null || nome.isEmpty || prezzo == null) {
+              return null;
+            }
+
+            return EntrataItem(
+              identrate: identrate,
+              nome: nome,
+              prezzo: prezzo,
+            );
+          })
+          .whereType<EntrataItem>()
+          .toList();
+    } catch (e) {
+      print('Errore caricamento ultime entrate: $e');
+      return <EntrataItem>[];
     }
   }
 }
