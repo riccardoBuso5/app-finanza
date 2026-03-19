@@ -34,7 +34,7 @@ class DbService {
   // Nota: su emulatori Android in genere si usa 10.0.2.2 al posto di localhost.
 
 
-  //static const String _baseUrl = 'http://10.0.2.2:3001/api';
+  //static const String _baseUrl = 'http://10.0.2.2:3002/api';
   static const String _baseUrl = 'http://localhost:3002/api'; // web/desktop
 
 
