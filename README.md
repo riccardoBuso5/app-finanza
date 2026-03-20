@@ -34,15 +34,15 @@ Obiettivo: avere un diario economico minimale, chiaro e facilmente estendibile.
 
 ### Login
 
-![Login](backend/screen/image_login.png)
+![Login](screen/image_login.png)
 
 ### Home / Spese
 
-![Home e Spese](backend/screen/image.png)
+![Home e Spese](screen/image.png)
 
 ### Bilancio
 
-![Bilancio](backend/screen/image_bilancio.png)
+![Bilancio](screen/image_bilancio.png)
 
 ## Architettura
 
