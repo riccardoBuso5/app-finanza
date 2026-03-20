@@ -152,7 +152,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                           TextFormField(
                             controller: _nameController,
                             decoration: const InputDecoration(
-                              labelText: 'Nome utente (Plus)',
+                              labelText: 'Nome utente',
                               border: OutlineInputBorder(),
                               prefixIcon: Icon(Icons.person),
                             ),

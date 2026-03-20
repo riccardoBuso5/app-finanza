@@ -73,32 +73,77 @@ const pool = mysql.createPool({
   queueLimit: 0,
 });
 
-function extractUserId(req) {
-  const headerValue = req.headers['x-user-id'];
-  const raw = headerValue ?? req.body?.userId ?? req.query?.userId;
-  const userId = typeof raw === 'string' ? raw.trim() : '';
-  return userId;
+function extractUserIdentity(req) {
+  const rawMail = req.headers['x-user-mail'] ?? req.body?.mail ?? req.body?.email ?? req.query?.mail;
+  const rawUserId = req.headers['x-user-id'] ?? req.body?.userId ?? req.query?.userId;
+
+  const mail = typeof rawMail === 'string' ? rawMail.trim() : '';
+  const userId = typeof rawUserId === 'string' ? rawUserId.trim() : '';
+
+  return { mail, userId };
 }
 
-function requireUserId(req, res) {
-  const userId = extractUserId(req);
-  if (!userId) {
-    res.status(400).json({ message: 'Utente non identificato (userId mancante)' });
-    return null;
+async function requireUserMail(req, res, conn) {
+  const { mail, userId } = extractUserIdentity(req);
+
+  if (mail) {
+    return mail;
   }
-  return userId;
+
+  if (userId) {
+    const [rows] = await conn.execute(
+      'SELECT mail FROM user WHERE userId = ? LIMIT 1',
+      [userId]
+    );
+    if (rows.length > 0 && rows[0].mail) {
+      return String(rows[0].mail).trim();
+    }
+  }
+
+  res.status(400).json({ message: 'Utente non identificato (mail o userId mancanti/non validi)' });
+  return null;
 }
 
 async function bootstrapSchema() {
   const conn = await pool.getConnection();
   try {
-    await conn.execute('ALTER TABLE categorie ADD COLUMN IF NOT EXISTS userId VARCHAR(100) NULL');
-    await conn.execute('ALTER TABLE spese ADD COLUMN IF NOT EXISTS userId VARCHAR(100) NULL');
-    await conn.execute('ALTER TABLE entrate ADD COLUMN IF NOT EXISTS userId VARCHAR(100) NULL');
+    await conn.execute('ALTER TABLE categorie ADD COLUMN IF NOT EXISTS mail VARCHAR(45) NULL');
+    await conn.execute('ALTER TABLE spese ADD COLUMN IF NOT EXISTS mail VARCHAR(45) NULL');
+    await conn.execute('ALTER TABLE entrate ADD COLUMN IF NOT EXISTS mail VARCHAR(45) NULL');
 
-    await conn.execute('CREATE INDEX IF NOT EXISTS idx_categorie_userId ON categorie (userId)');
-    await conn.execute('CREATE INDEX IF NOT EXISTS idx_spese_userId ON spese (userId)');
-    await conn.execute('CREATE INDEX IF NOT EXISTS idx_entrate_userId ON entrate (userId)');
+    await conn.execute('ALTER TABLE categorie MODIFY COLUMN mail VARCHAR(45) NULL');
+    await conn.execute('ALTER TABLE spese MODIFY COLUMN mail VARCHAR(45) NULL');
+    await conn.execute('ALTER TABLE entrate MODIFY COLUMN mail VARCHAR(45) NULL');
+
+    await conn.execute('CREATE INDEX IF NOT EXISTS idx_categorie_mail ON categorie (mail)');
+    await conn.execute('CREATE INDEX IF NOT EXISTS idx_spese_mail ON spese (mail)');
+    await conn.execute('CREATE INDEX IF NOT EXISTS idx_entrate_mail ON entrate (mail)');
+
+    // Backfill ownership mail partendo da userId, quando disponibile.
+    await conn.execute(
+      `UPDATE categorie c
+       JOIN user u ON u.userId = c.userId
+       SET c.mail = u.mail
+       WHERE c.mail IS NULL
+         AND c.userId IS NOT NULL
+         AND c.userId <> ''`
+    );
+    await conn.execute(
+      `UPDATE spese s
+       JOIN user u ON u.userId = s.userId
+       SET s.mail = u.mail
+       WHERE s.mail IS NULL
+         AND s.userId IS NOT NULL
+         AND s.userId <> ''`
+    );
+    await conn.execute(
+      `UPDATE entrate e
+       JOIN user u ON u.userId = e.userId
+       SET e.mail = u.mail
+       WHERE e.mail IS NULL
+         AND e.userId IS NOT NULL
+         AND e.userId <> ''`
+    );
   } finally {
     conn.release();
   }
@@ -123,14 +168,6 @@ app.post('/api/register', async (req, res) => {
       );
       if (rows.length > 0) {
         return res.status(400).json({ message: 'Email gia registrata' });
-      }
-
-      const [userIdRows] = await conn.execute(
-        'SELECT userId FROM user WHERE userId = ?',
-        [userId]
-      );
-      if (userIdRows.length > 0) {
-        return res.status(400).json({ message: 'Nome utente gia in uso' });
       }
 
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -203,8 +240,6 @@ app.post('/api/login', async (req, res) => {
 app.post('/api/categorie', async (req, res) => {
   try {
     const { nome } = req.body;
-    const userId = requireUserId(req, res);
-    if (!userId) return;
 
     if (!nome) {
       return res.status(400).json({ message: 'Inserisci il nome della categoria' });
@@ -212,17 +247,20 @@ app.post('/api/categorie', async (req, res) => {
 
     const conn = await pool.getConnection();
     try {
+      const userMail = await requireUserMail(req, res, conn);
+      if (!userMail) return;
+
       const [existingRows] = await conn.execute(
-        'SELECT idcategoria FROM categorie WHERE userId = ? AND nome = ? LIMIT 1',
-        [userId, nome.trim()]
+        'SELECT idcategoria FROM categorie WHERE mail = ? AND nome = ? LIMIT 1',
+        [userMail, nome.trim()]
       );
       if (existingRows.length > 0) {
         return res.status(400).json({ message: 'Categoria gia esistente' });
       }
 
       const [result] = await conn.execute(
-        'INSERT INTO categorie (nome, userId) VALUES (?, ?)',
-        [nome.trim(), userId]
+        'INSERT INTO categorie (nome, mail) VALUES (?, ?)',
+        [nome.trim(), userMail]
       );
 
       return res.status(201).json({
@@ -244,14 +282,14 @@ app.post('/api/categorie', async (req, res) => {
 // Endpoint lettura categorie per combobox
 app.get('/api/categorie', async (req, res) => {
   try {
-    const userId = requireUserId(req, res);
-    if (!userId) return;
-
     const conn = await pool.getConnection();
     try {
+      const userMail = await requireUserMail(req, res, conn);
+      if (!userMail) return;
+
       const [rows] = await conn.execute(
-        'SELECT idcategoria, nome FROM categorie WHERE userId = ? ORDER BY nome ASC',
-        [userId]
+        'SELECT idcategoria, nome FROM categorie WHERE mail = ? ORDER BY nome ASC',
+        [userMail]
       );
       return res.json({ categorie: rows });
     } finally {
@@ -267,8 +305,6 @@ app.put('/api/categorie/:idcategoria', async (req, res) => {
   try {
     const idcategoria = Number(req.params.idcategoria);
     const { nome } = req.body;
-    const userId = requireUserId(req, res);
-    if (!userId) return;
 
     if (!Number.isInteger(idcategoria) || idcategoria <= 0) {
       return res.status(400).json({ message: 'ID categoria non valido' });
@@ -280,9 +316,12 @@ app.put('/api/categorie/:idcategoria', async (req, res) => {
 
     const conn = await pool.getConnection();
     try {
+      const userMail = await requireUserMail(req, res, conn);
+      if (!userMail) return;
+
       const [result] = await conn.execute(
-        'UPDATE categorie SET nome = ? WHERE idcategoria = ? AND userId = ? LIMIT 1',
-        [String(nome).trim(), idcategoria, userId]
+        'UPDATE categorie SET nome = ? WHERE idcategoria = ? AND mail = ? LIMIT 1',
+        [String(nome).trim(), idcategoria, userMail]
       );
 
       if (result.affectedRows === 0) {
@@ -305,8 +344,6 @@ app.put('/api/categorie/:idcategoria', async (req, res) => {
 app.delete('/api/categorie/:idcategoria', async (req, res) => {
   try {
     const idcategoria = Number(req.params.idcategoria);
-    const userId = requireUserId(req, res);
-    if (!userId) return;
 
     if (!Number.isInteger(idcategoria) || idcategoria <= 0) {
       return res.status(400).json({ message: 'ID categoria non valido' });
@@ -314,9 +351,12 @@ app.delete('/api/categorie/:idcategoria', async (req, res) => {
 
     const conn = await pool.getConnection();
     try {
+      const userMail = await requireUserMail(req, res, conn);
+      if (!userMail) return;
+
       const [result] = await conn.execute(
-        'DELETE FROM categorie WHERE idcategoria = ? AND userId = ? LIMIT 1',
-        [idcategoria, userId]
+        'DELETE FROM categorie WHERE idcategoria = ? AND mail = ? LIMIT 1',
+        [idcategoria, userMail]
       );
 
       if (result.affectedRows === 0) {
@@ -340,8 +380,6 @@ app.delete('/api/categorie/:idcategoria', async (req, res) => {
 app.post('/api/spese', async (req, res) => {
   try {
     const { nome, giorno, prezzo, idcategoria, categoria } = req.body;
-    const userId = requireUserId(req, res);
-    if (!userId) return;
 
     if (!nome || !giorno || prezzo === undefined || prezzo === null || (!idcategoria && !categoria)) {
       return res.status(400).json({ message: 'Compila tutti i campi della spesa' });
@@ -359,6 +397,9 @@ app.post('/api/spese', async (req, res) => {
 
     const conn = await pool.getConnection();
     try {
+      const userMail = await requireUserMail(req, res, conn);
+      if (!userMail) return;
+
       // Transazione: o salviamo tutta la spesa, o annulliamo tutto in caso di errore.
       await conn.beginTransaction();
 
@@ -366,8 +407,8 @@ app.post('/api/spese', async (req, res) => {
       if (!Number.isInteger(categoriaId) || categoriaId <= 0) {
         // Fallback: se il frontend invia il nome categoria, recuperiamo il relativo id.
         const [categoriaRows] = await conn.execute(
-          'SELECT idcategoria FROM categorie WHERE nome = ? AND userId = ? LIMIT 1',
-          [categoria, userId]
+          'SELECT idcategoria FROM categorie WHERE nome = ? AND mail = ? LIMIT 1',
+          [categoria, userMail]
         );
         if (categoriaRows.length === 0) {
           await conn.rollback();
@@ -377,8 +418,8 @@ app.post('/api/spese', async (req, res) => {
       }
 
       const [result] = await conn.execute(
-        'INSERT INTO spese (nome, giorno, prezzo, idcategoria, userId) VALUES (?, ?, ?, ?, ?)',
-        [nome, giorno, prezzoInt, categoriaId, userId]
+        'INSERT INTO spese (nome, giorno, prezzo, idcategoria, mail) VALUES (?, ?, ?, ?, ?)',
+        [nome, giorno, prezzoInt, categoriaId, userMail]
       );
 
       const spesaId = result.insertId;
@@ -404,8 +445,6 @@ app.put('/api/spese/:idspese', async (req, res) => {
   try {
     const idspese = Number(req.params.idspese);
     const { nome, giorno, prezzo, idcategoria } = req.body;
-    const userId = requireUserId(req, res);
-    if (!userId) return;
 
     if (!Number.isInteger(idspese) || idspese <= 0) {
       return res.status(400).json({ message: 'ID spesa non valido' });
@@ -432,9 +471,12 @@ app.put('/api/spese/:idspese', async (req, res) => {
 
     const conn = await pool.getConnection();
     try {
+      const userMail = await requireUserMail(req, res, conn);
+      if (!userMail) return;
+
       const [result] = await conn.execute(
-        'UPDATE spese SET nome = ?, giorno = STR_TO_DATE(?, \'%Y-%m-%d\'), prezzo = ?, idcategoria = ? WHERE idspese = ? AND userId = ? LIMIT 1',
-        [nome.trim(), String(giorno), prezzoInt, categoriaId, idspese, userId]
+        'UPDATE spese SET nome = ?, giorno = STR_TO_DATE(?, \'%Y-%m-%d\'), prezzo = ?, idcategoria = ? WHERE idspese = ? AND mail = ? LIMIT 1',
+        [nome.trim(), String(giorno), prezzoInt, categoriaId, idspese, userMail]
       );
 
       if (result.affectedRows === 0) {
@@ -455,8 +497,6 @@ app.put('/api/spese/:idspese', async (req, res) => {
 app.post('/api/entrate', async (req, res) => {
   try {
     const { nome, prezzo, data, giorno } = req.body;
-    const userId = requireUserId(req, res);
-    if (!userId) return;
 
     const dataValue = data ?? giorno;
     const now = new Date();
@@ -481,10 +521,13 @@ app.post('/api/entrate', async (req, res) => {
 
     const conn = await pool.getConnection();
     try {
+      const userMail = await requireUserMail(req, res, conn);
+      if (!userMail) return;
+
       
       const [result] = await conn.execute(
-        'INSERT INTO entrate (nome, prezzo, data, userId) VALUES (?, ?, STR_TO_DATE(?, \'%Y-%m-%d\'), ?)',
-        [nome.trim(), prezzoInt, normalizedDate, userId]
+        'INSERT INTO entrate (nome, prezzo, data, mail) VALUES (?, ?, STR_TO_DATE(?, \'%Y-%m-%d\'), ?)',
+        [nome.trim(), prezzoInt, normalizedDate, userMail]
       );
 
       return res.status(201).json({
@@ -510,8 +553,6 @@ app.put('/api/entrate/:identrate', async (req, res) => {
   try {
     const identrate = Number(req.params.identrate);
     const { nome, prezzo, data, giorno } = req.body;
-    const userId = requireUserId(req, res);
-    if (!userId) return;
 
     const dataValue = data ?? giorno;
 
@@ -536,9 +577,12 @@ app.put('/api/entrate/:identrate', async (req, res) => {
 
     const conn = await pool.getConnection();
     try {
+      const userMail = await requireUserMail(req, res, conn);
+      if (!userMail) return;
+
       const [result] = await conn.execute(
-        'UPDATE entrate SET nome = ?, prezzo = ?, data = STR_TO_DATE(?, \'%Y-%m-%d\') WHERE identrate = ? AND userId = ? LIMIT 1',
-        [nome.trim(), prezzoInt, normalizedDate, identrate, userId]
+        'UPDATE entrate SET nome = ?, prezzo = ?, data = STR_TO_DATE(?, \'%Y-%m-%d\') WHERE identrate = ? AND mail = ? LIMIT 1',
+        [nome.trim(), prezzoInt, normalizedDate, identrate, userMail]
       );
 
       if (result.affectedRows === 0) {
@@ -558,9 +602,6 @@ app.put('/api/entrate/:identrate', async (req, res) => {
 // Endpoint ultime spese per Home
 app.get('/api/spese', async (req, res) => {
   try {
-    const userId = requireUserId(req, res);
-    if (!userId) return;
-
     const requestedLimit = Number(req.query.limit);
     // Limite protetto per evitare richieste troppo pesanti.
     const limit = Number.isInteger(requestedLimit) && requestedLimit > 0
@@ -569,14 +610,17 @@ app.get('/api/spese', async (req, res) => {
 
     const conn = await pool.getConnection();
     try {
+      const userMail = await requireUserMail(req, res, conn);
+      if (!userMail) return;
+
       const [rows] = await conn.query(
         `SELECT s.idspese, s.nome, DATE_FORMAT(s.giorno, '%Y-%m-%d') AS giorno, s.prezzo, s.idcategoria, c.nome AS categoria_nome
          FROM spese s
          LEFT JOIN categorie c ON c.idcategoria = s.idcategoria
-         WHERE s.userId = ?
+         WHERE s.mail = ?
          ORDER BY s.giorno DESC, s.idspese DESC
          LIMIT ${limit}`,
-        [userId]
+        [userMail]
       );
 
       return res.json({ spese: rows });
@@ -591,9 +635,6 @@ app.get('/api/spese', async (req, res) => {
 
 app.get('/api/entrate', async (req, res) => {
   try {
-    const userId = requireUserId(req, res);
-    if (!userId) return;
-
     const requestedLimit = Number(req.query.limit);
     // Limite protetto per evitare richieste troppo pesanti.
     const limit = Number.isInteger(requestedLimit) && requestedLimit > 0
@@ -602,13 +643,16 @@ app.get('/api/entrate', async (req, res) => {
 
     const conn = await pool.getConnection();
     try {
+      const userMail = await requireUserMail(req, res, conn);
+      if (!userMail) return;
+
       const [rows] = await conn.query(
         `SELECT e.identrate, e.nome, e.prezzo, DATE_FORMAT(e.data, '%Y-%m-%d') AS data
          FROM entrate e
-         WHERE e.userId = ?
+         WHERE e.mail = ?
          ORDER BY e.data DESC, e.identrate DESC
          LIMIT ${limit}`,
-        [userId]
+        [userMail]
       );
 
       return res.json({
@@ -628,8 +672,6 @@ app.get('/api/entrate', async (req, res) => {
 app.delete('/api/spese/:idspese', async (req, res) => {
   try {
     const idspese = Number(req.params.idspese);
-    const userId = requireUserId(req, res);
-    if (!userId) return;
 
     if (!Number.isInteger(idspese) || idspese <= 0) {
       return res.status(400).json({ message: 'ID spesa non valido' });
@@ -637,9 +679,12 @@ app.delete('/api/spese/:idspese', async (req, res) => {
 
     const conn = await pool.getConnection();
     try {
+      const userMail = await requireUserMail(req, res, conn);
+      if (!userMail) return;
+
       const [result] = await conn.execute(
-        'DELETE FROM spese WHERE idspese = ? AND userId = ? LIMIT 1',
-        [idspese, userId]
+        'DELETE FROM spese WHERE idspese = ? AND mail = ? LIMIT 1',
+        [idspese, userMail]
       );
 
       if (result.affectedRows === 0) {
@@ -659,8 +704,6 @@ app.delete('/api/spese/:idspese', async (req, res) => {
 app.delete('/api/entrate/:identrate', async (req, res) => {
   try {
     const identrate = Number(req.params.identrate);
-    const userId = requireUserId(req, res);
-    if (!userId) return;
 
     if (!Number.isInteger(identrate) || identrate <= 0) {
       return res.status(400).json({ message: 'ID entrata non valido' });
@@ -668,9 +711,12 @@ app.delete('/api/entrate/:identrate', async (req, res) => {
 
     const conn = await pool.getConnection();
     try {
+      const userMail = await requireUserMail(req, res, conn);
+      if (!userMail) return;
+
       const [result] = await conn.execute(
-        'DELETE FROM entrate WHERE identrate = ? AND userId = ? LIMIT 1',
-        [identrate, userId]
+        'DELETE FROM entrate WHERE identrate = ? AND mail = ? LIMIT 1',
+        [identrate, userMail]
       );
 
       if (result.affectedRows === 0) {
