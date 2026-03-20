@@ -73,6 +73,37 @@ const pool = mysql.createPool({
   queueLimit: 0,
 });
 
+function extractUserId(req) {
+  const headerValue = req.headers['x-user-id'];
+  const raw = headerValue ?? req.body?.userId ?? req.query?.userId;
+  const userId = typeof raw === 'string' ? raw.trim() : '';
+  return userId;
+}
+
+function requireUserId(req, res) {
+  const userId = extractUserId(req);
+  if (!userId) {
+    res.status(400).json({ message: 'Utente non identificato (userId mancante)' });
+    return null;
+  }
+  return userId;
+}
+
+async function bootstrapSchema() {
+  const conn = await pool.getConnection();
+  try {
+    await conn.execute('ALTER TABLE categorie ADD COLUMN IF NOT EXISTS userId VARCHAR(100) NULL');
+    await conn.execute('ALTER TABLE spese ADD COLUMN IF NOT EXISTS userId VARCHAR(100) NULL');
+    await conn.execute('ALTER TABLE entrate ADD COLUMN IF NOT EXISTS userId VARCHAR(100) NULL');
+
+    await conn.execute('CREATE INDEX IF NOT EXISTS idx_categorie_userId ON categorie (userId)');
+    await conn.execute('CREATE INDEX IF NOT EXISTS idx_spese_userId ON spese (userId)');
+    await conn.execute('CREATE INDEX IF NOT EXISTS idx_entrate_userId ON entrate (userId)');
+  } finally {
+    conn.release();
+  }
+}
+
 // Nota: ogni endpoint apre una connessione dal pool e la rilascia sempre nel finally.
 // In questo modo si evitano connessioni "bloccate" quando ci sono errori.
 // Endpoint di registrazione
@@ -153,6 +184,7 @@ app.post('/api/login', async (req, res) => {
       return res.json({
         message: 'Login riuscito',
         user: {
+          userId: user.userId,
           nome: user.userId,
           email: user.mail,
         },
@@ -171,6 +203,8 @@ app.post('/api/login', async (req, res) => {
 app.post('/api/categorie', async (req, res) => {
   try {
     const { nome } = req.body;
+    const userId = requireUserId(req, res);
+    if (!userId) return;
 
     if (!nome) {
       return res.status(400).json({ message: 'Inserisci il nome della categoria' });
@@ -178,9 +212,17 @@ app.post('/api/categorie', async (req, res) => {
 
     const conn = await pool.getConnection();
     try {
+      const [existingRows] = await conn.execute(
+        'SELECT idcategoria FROM categorie WHERE userId = ? AND nome = ? LIMIT 1',
+        [userId, nome.trim()]
+      );
+      if (existingRows.length > 0) {
+        return res.status(400).json({ message: 'Categoria gia esistente' });
+      }
+
       const [result] = await conn.execute(
-        'INSERT INTO categorie (nome) VALUES (?)',
-        [nome.trim()]
+        'INSERT INTO categorie (nome, userId) VALUES (?, ?)',
+        [nome.trim(), userId]
       );
 
       return res.status(201).json({
@@ -200,12 +242,16 @@ app.post('/api/categorie', async (req, res) => {
 });
 
 // Endpoint lettura categorie per combobox
-app.get('/api/categorie', async (_req, res) => {
+app.get('/api/categorie', async (req, res) => {
   try {
+    const userId = requireUserId(req, res);
+    if (!userId) return;
+
     const conn = await pool.getConnection();
     try {
       const [rows] = await conn.execute(
-        'SELECT idcategoria, nome FROM categorie ORDER BY nome ASC'
+        'SELECT idcategoria, nome FROM categorie WHERE userId = ? ORDER BY nome ASC',
+        [userId]
       );
       return res.json({ categorie: rows });
     } finally {
@@ -221,6 +267,8 @@ app.put('/api/categorie/:idcategoria', async (req, res) => {
   try {
     const idcategoria = Number(req.params.idcategoria);
     const { nome } = req.body;
+    const userId = requireUserId(req, res);
+    if (!userId) return;
 
     if (!Number.isInteger(idcategoria) || idcategoria <= 0) {
       return res.status(400).json({ message: 'ID categoria non valido' });
@@ -233,8 +281,8 @@ app.put('/api/categorie/:idcategoria', async (req, res) => {
     const conn = await pool.getConnection();
     try {
       const [result] = await conn.execute(
-        'UPDATE categorie SET nome = ? WHERE idcategoria = ? LIMIT 1',
-        [String(nome).trim(), idcategoria]
+        'UPDATE categorie SET nome = ? WHERE idcategoria = ? AND userId = ? LIMIT 1',
+        [String(nome).trim(), idcategoria, userId]
       );
 
       if (result.affectedRows === 0) {
@@ -257,6 +305,9 @@ app.put('/api/categorie/:idcategoria', async (req, res) => {
 app.delete('/api/categorie/:idcategoria', async (req, res) => {
   try {
     const idcategoria = Number(req.params.idcategoria);
+    const userId = requireUserId(req, res);
+    if (!userId) return;
+
     if (!Number.isInteger(idcategoria) || idcategoria <= 0) {
       return res.status(400).json({ message: 'ID categoria non valido' });
     }
@@ -264,8 +315,8 @@ app.delete('/api/categorie/:idcategoria', async (req, res) => {
     const conn = await pool.getConnection();
     try {
       const [result] = await conn.execute(
-        'DELETE FROM categorie WHERE idcategoria = ? LIMIT 1',
-        [idcategoria]
+        'DELETE FROM categorie WHERE idcategoria = ? AND userId = ? LIMIT 1',
+        [idcategoria, userId]
       );
 
       if (result.affectedRows === 0) {
@@ -289,6 +340,8 @@ app.delete('/api/categorie/:idcategoria', async (req, res) => {
 app.post('/api/spese', async (req, res) => {
   try {
     const { nome, giorno, prezzo, idcategoria, categoria } = req.body;
+    const userId = requireUserId(req, res);
+    if (!userId) return;
 
     if (!nome || !giorno || prezzo === undefined || prezzo === null || (!idcategoria && !categoria)) {
       return res.status(400).json({ message: 'Compila tutti i campi della spesa' });
@@ -313,8 +366,8 @@ app.post('/api/spese', async (req, res) => {
       if (!Number.isInteger(categoriaId) || categoriaId <= 0) {
         // Fallback: se il frontend invia il nome categoria, recuperiamo il relativo id.
         const [categoriaRows] = await conn.execute(
-          'SELECT idcategoria FROM categorie WHERE nome = ? LIMIT 1',
-          [categoria]
+          'SELECT idcategoria FROM categorie WHERE nome = ? AND userId = ? LIMIT 1',
+          [categoria, userId]
         );
         if (categoriaRows.length === 0) {
           await conn.rollback();
@@ -324,8 +377,8 @@ app.post('/api/spese', async (req, res) => {
       }
 
       const [result] = await conn.execute(
-        'INSERT INTO spese (nome, giorno, prezzo, idcategoria) VALUES (?, ?, ?, ?)',
-        [nome, giorno, prezzoInt, categoriaId]
+        'INSERT INTO spese (nome, giorno, prezzo, idcategoria, userId) VALUES (?, ?, ?, ?, ?)',
+        [nome, giorno, prezzoInt, categoriaId, userId]
       );
 
       const spesaId = result.insertId;
@@ -351,6 +404,8 @@ app.put('/api/spese/:idspese', async (req, res) => {
   try {
     const idspese = Number(req.params.idspese);
     const { nome, giorno, prezzo, idcategoria } = req.body;
+    const userId = requireUserId(req, res);
+    if (!userId) return;
 
     if (!Number.isInteger(idspese) || idspese <= 0) {
       return res.status(400).json({ message: 'ID spesa non valido' });
@@ -378,8 +433,8 @@ app.put('/api/spese/:idspese', async (req, res) => {
     const conn = await pool.getConnection();
     try {
       const [result] = await conn.execute(
-        'UPDATE spese SET nome = ?, giorno = STR_TO_DATE(?, \'%Y-%m-%d\'), prezzo = ?, idcategoria = ? WHERE idspese = ? LIMIT 1',
-        [nome.trim(), String(giorno), prezzoInt, categoriaId, idspese]
+        'UPDATE spese SET nome = ?, giorno = STR_TO_DATE(?, \'%Y-%m-%d\'), prezzo = ?, idcategoria = ? WHERE idspese = ? AND userId = ? LIMIT 1',
+        [nome.trim(), String(giorno), prezzoInt, categoriaId, idspese, userId]
       );
 
       if (result.affectedRows === 0) {
@@ -400,6 +455,9 @@ app.put('/api/spese/:idspese', async (req, res) => {
 app.post('/api/entrate', async (req, res) => {
   try {
     const { nome, prezzo, data, giorno } = req.body;
+    const userId = requireUserId(req, res);
+    if (!userId) return;
+
     const dataValue = data ?? giorno;
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -425,8 +483,8 @@ app.post('/api/entrate', async (req, res) => {
     try {
       
       const [result] = await conn.execute(
-        'INSERT INTO entrate (nome, prezzo, data) VALUES (?, ?, STR_TO_DATE(?, \'%Y-%m-%d\'))',
-        [nome.trim(), prezzoInt, normalizedDate]
+        'INSERT INTO entrate (nome, prezzo, data, userId) VALUES (?, ?, STR_TO_DATE(?, \'%Y-%m-%d\'), ?)',
+        [nome.trim(), prezzoInt, normalizedDate, userId]
       );
 
       return res.status(201).json({
@@ -452,6 +510,9 @@ app.put('/api/entrate/:identrate', async (req, res) => {
   try {
     const identrate = Number(req.params.identrate);
     const { nome, prezzo, data, giorno } = req.body;
+    const userId = requireUserId(req, res);
+    if (!userId) return;
+
     const dataValue = data ?? giorno;
 
     if (!Number.isInteger(identrate) || identrate <= 0) {
@@ -476,8 +537,8 @@ app.put('/api/entrate/:identrate', async (req, res) => {
     const conn = await pool.getConnection();
     try {
       const [result] = await conn.execute(
-        'UPDATE entrate SET nome = ?, prezzo = ?, data = STR_TO_DATE(?, \'%Y-%m-%d\') WHERE identrate = ? LIMIT 1',
-        [nome.trim(), prezzoInt, normalizedDate, identrate]
+        'UPDATE entrate SET nome = ?, prezzo = ?, data = STR_TO_DATE(?, \'%Y-%m-%d\') WHERE identrate = ? AND userId = ? LIMIT 1',
+        [nome.trim(), prezzoInt, normalizedDate, identrate, userId]
       );
 
       if (result.affectedRows === 0) {
@@ -497,6 +558,9 @@ app.put('/api/entrate/:identrate', async (req, res) => {
 // Endpoint ultime spese per Home
 app.get('/api/spese', async (req, res) => {
   try {
+    const userId = requireUserId(req, res);
+    if (!userId) return;
+
     const requestedLimit = Number(req.query.limit);
     // Limite protetto per evitare richieste troppo pesanti.
     const limit = Number.isInteger(requestedLimit) && requestedLimit > 0
@@ -509,8 +573,10 @@ app.get('/api/spese', async (req, res) => {
         `SELECT s.idspese, s.nome, DATE_FORMAT(s.giorno, '%Y-%m-%d') AS giorno, s.prezzo, s.idcategoria, c.nome AS categoria_nome
          FROM spese s
          LEFT JOIN categorie c ON c.idcategoria = s.idcategoria
+         WHERE s.userId = ?
          ORDER BY s.giorno DESC, s.idspese DESC
-         LIMIT ${limit}`
+         LIMIT ${limit}`,
+        [userId]
       );
 
       return res.json({ spese: rows });
@@ -525,6 +591,9 @@ app.get('/api/spese', async (req, res) => {
 
 app.get('/api/entrate', async (req, res) => {
   try {
+    const userId = requireUserId(req, res);
+    if (!userId) return;
+
     const requestedLimit = Number(req.query.limit);
     // Limite protetto per evitare richieste troppo pesanti.
     const limit = Number.isInteger(requestedLimit) && requestedLimit > 0
@@ -536,8 +605,10 @@ app.get('/api/entrate', async (req, res) => {
       const [rows] = await conn.query(
         `SELECT e.identrate, e.nome, e.prezzo, DATE_FORMAT(e.data, '%Y-%m-%d') AS data
          FROM entrate e
+         WHERE e.userId = ?
          ORDER BY e.data DESC, e.identrate DESC
-         LIMIT ${limit}`
+         LIMIT ${limit}`,
+        [userId]
       );
 
       return res.json({
@@ -557,6 +628,9 @@ app.get('/api/entrate', async (req, res) => {
 app.delete('/api/spese/:idspese', async (req, res) => {
   try {
     const idspese = Number(req.params.idspese);
+    const userId = requireUserId(req, res);
+    if (!userId) return;
+
     if (!Number.isInteger(idspese) || idspese <= 0) {
       return res.status(400).json({ message: 'ID spesa non valido' });
     }
@@ -564,8 +638,8 @@ app.delete('/api/spese/:idspese', async (req, res) => {
     const conn = await pool.getConnection();
     try {
       const [result] = await conn.execute(
-        'DELETE FROM spese WHERE idspese = ? LIMIT 1',
-        [idspese]
+        'DELETE FROM spese WHERE idspese = ? AND userId = ? LIMIT 1',
+        [idspese, userId]
       );
 
       if (result.affectedRows === 0) {
@@ -585,6 +659,9 @@ app.delete('/api/spese/:idspese', async (req, res) => {
 app.delete('/api/entrate/:identrate', async (req, res) => {
   try {
     const identrate = Number(req.params.identrate);
+    const userId = requireUserId(req, res);
+    if (!userId) return;
+
     if (!Number.isInteger(identrate) || identrate <= 0) {
       return res.status(400).json({ message: 'ID entrata non valido' });
     }
@@ -592,8 +669,8 @@ app.delete('/api/entrate/:identrate', async (req, res) => {
     const conn = await pool.getConnection();
     try {
       const [result] = await conn.execute(
-        'DELETE FROM entrate WHERE identrate = ? LIMIT 1',
-        [identrate]
+        'DELETE FROM entrate WHERE identrate = ? AND userId = ? LIMIT 1',
+        [identrate, userId]
       );
 
       if (result.affectedRows === 0) {
@@ -637,9 +714,19 @@ app.get('/api/health/db', async (_req, res) => {
 
 // Avvia il server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server in ascolto su http://localhost:${PORT}`);
-});
+async function startServer() {
+  try {
+    await bootstrapSchema();
+    app.listen(PORT, () => {
+      console.log(`Server in ascolto su http://localhost:${PORT}`);
+    });
+  } catch (error) {
+    console.error('Errore bootstrap schema:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
 
 // Chiude il pool alla terminazione
 process.on('SIGINT', async () => {

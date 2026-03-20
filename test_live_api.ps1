@@ -12,6 +12,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+$script:RequestUserId = $null
 
 function Normalize-ApiBase {
     param([string]$Url)
@@ -61,6 +62,10 @@ function Invoke-Api {
 
     $headers = @{
         "Accept" = "application/json"
+    }
+
+    if ($script:RequestUserId) {
+        $headers["x-user-id"] = $script:RequestUserId
     }
 
     $requestParams = @{
@@ -140,6 +145,7 @@ $today = Get-Date -Format "yyyy-MM-dd"
 
 Write-Step -Level INFO -Message ("API base: " + $apiBase)
 Write-Step -Level INFO -Message ("Test user: " + $TestUserId + " / " + $TestEmail)
+$script:RequestUserId = $TestUserId
 
 $results = New-Object System.Collections.Generic.List[object]
 

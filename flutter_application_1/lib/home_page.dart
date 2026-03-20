@@ -517,6 +517,7 @@ class _HomePageState extends State<HomePage> {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: () {
+                        DbService.setCurrentUserId(null);
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(builder: (_) => const LoginPage()),

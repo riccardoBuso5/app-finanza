@@ -93,6 +93,11 @@ class _LoginPageState extends State<LoginPage> {
  
       if (mounted) {
         if (user != null) {
+          final userId = user['userId']?.toString().trim().isNotEmpty == true
+              ? user['userId'].toString().trim()
+              : (user['nome']?.toString().trim() ?? '');
+
+          DbService.setCurrentUserId(userId);
           await _saveCredentialsIfNeeded();
 
           final nomeRaw = user['nome']?.toString().trim();
@@ -119,6 +124,7 @@ class _LoginPageState extends State<LoginPage> {
             ),
           );
         } else {
+          DbService.setCurrentUserId(null);
           // Login fallito
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Email o password non validi')),

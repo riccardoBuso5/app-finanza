@@ -1,7 +1,8 @@
 param(
   [string]$FlutterProjectPath = 'flutter_application_1',
   [switch]$SkipPubGet,
-  [string]$Device = 'chrome'
+  [string]$Device = 'chrome',
+  [string]$ApiBaseUrl = ''
 
 )
 
@@ -15,15 +16,19 @@ $backendDir = Join-Path $repoRoot 'backend'
 if(-not (Test-Path $backendDir)) {
   throw "Cartella backend non trovata: $backendDir"
 }else{
-  Write-Host "Avvio backend in un nuovo terminale..."
-  $backendCommand = "& { Set-Location -LiteralPath '$backendDir'; npm install; npm start }"
-  Start-Process -FilePath 'powershell.exe' -ArgumentList @(
-    '-NoExit',
-    '-ExecutionPolicy',
-    'Bypass',
-    '-Command',
-    $backendCommand
-  )
+  if ($ApiBaseUrl.Trim().Length -gt 0) {
+    Write-Host "API remota impostata: salto avvio backend locale."
+  } else {
+    Write-Host "Avvio backend in un nuovo terminale..."
+    $backendCommand = "& { Set-Location -LiteralPath '$backendDir'; npm install; npm start }"
+    Start-Process -FilePath 'powershell.exe' -ArgumentList @(
+      '-NoExit',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-Command',
+      $backendCommand
+    )
+  }
 } 
 
 
@@ -46,6 +51,20 @@ if (Test-Path $buildDir) {
 
 Push-Location $projectDir
 try {
+  $flutterArgs = @('run', '-d')
+  if ($Device -eq 'chrome') {
+    $flutterArgs += 'chrome'
+  } elseif ($Device -eq 'emulator') {
+    $flutterArgs += 'emulator-5554'
+  } else {
+    $flutterArgs += $Device
+  }
+
+  if ($ApiBaseUrl.Trim().Length -gt 0) {
+    Write-Host "Uso API base URL remoto: $ApiBaseUrl"
+    $flutterArgs += "--dart-define=API_BASE_URL=$ApiBaseUrl"
+  }
+
   if (-not $SkipPubGet) {
     Write-Host 'Eseguo flutter pub get...'
     flutter pub get
@@ -53,13 +72,13 @@ try {
 
   if ($Device -eq 'chrome') {
       Write-Host 'Avvio app su Chrome...'
-      flutter run -d chrome
+      flutter @flutterArgs
   } elseif ($Device -eq 'emulator') {
       Write-Host 'Avvio app su emulatore Android (emulator-5554)...'
-      flutter run -d emulator-5554
+      flutter @flutterArgs
   } else {
       Write-Host "Avvio app sul device specificato: $Device"
-      flutter run -d $Device
+      flutter @flutterArgs
   }
 }
 finally {

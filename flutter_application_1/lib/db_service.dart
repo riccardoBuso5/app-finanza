@@ -46,10 +46,45 @@ class EntrataItem {
 
 // Servizio per comunicare con il backend API Node.js/Express
 class DbService {
+  static const String _apiBaseUrlFromDefine = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: '',
+  );
+
+  static String? _currentUserId;
+
+  static void setCurrentUserId(String? userId) {
+    final normalized = userId?.trim();
+    _currentUserId = (normalized != null && normalized.isNotEmpty)
+        ? normalized
+        : null;
+  }
+
+  static Map<String, String> _buildHeaders({bool includeContentType = false}) {
+    final headers = <String, String>{
+      'Accept': 'application/json',
+    };
+
+    if (includeContentType) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    if (_currentUserId != null && _currentUserId!.isNotEmpty) {
+      headers['x-user-id'] = _currentUserId!;
+    }
+
+    return headers;
+  }
+
   // URL base del backend.
   // Android emulator -> 10.0.2.2
   // Web/Desktop -> localhost
   static String get _baseUrl {
+    if (_apiBaseUrlFromDefine.trim().isNotEmpty) {
+      final raw = _apiBaseUrlFromDefine.trim().replaceAll(RegExp(r'/+$'), '');
+      return raw.endsWith('/api') ? raw : '$raw/api';
+    }
+
     if (kIsWeb) {
       return 'http://localhost:3002/api';
     }
@@ -71,9 +106,7 @@ class DbService {
       final url = Uri.parse('$_baseUrl$endpoint');
       final response = await http.post(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: _buildHeaders(includeContentType: true),
         body: jsonEncode(body),
       );
 
@@ -109,7 +142,7 @@ class DbService {
   static Future<Map<String, dynamic>> _getRequest(String endpoint) async {
     try {
       final url = Uri.parse('$_baseUrl$endpoint');
-      final response = await http.get(url);
+      final response = await http.get(url, headers: _buildHeaders());
 
       Map<String, dynamic>? data;
       if (response.body.isNotEmpty) {
@@ -140,7 +173,7 @@ class DbService {
   static Future<Map<String, dynamic>> _deleteRequest(String endpoint) async {
     try {
       final url = Uri.parse('$_baseUrl$endpoint');
-      final response = await http.delete(url);
+      final response = await http.delete(url, headers: _buildHeaders());
 
       Map<String, dynamic>? data;
       if (response.body.isNotEmpty) {
@@ -176,9 +209,7 @@ class DbService {
       final url = Uri.parse('$_baseUrl$endpoint');
       final response = await http.put(
         url,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: _buildHeaders(includeContentType: true),
         body: jsonEncode(body),
       );
 
