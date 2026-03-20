@@ -594,6 +594,26 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'OK', message: 'Server e online' });
 });
 
+// Health check database: utile in produzione per distinguere errori app da errori DB/TLS.
+app.get('/api/health/db', async (_req, res) => {
+  try {
+    const conn = await pool.getConnection();
+    try {
+      await conn.query('SELECT 1 AS ok');
+      return res.json({ status: 'OK', message: 'Database raggiungibile' });
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    return res.status(500).json({
+      status: 'ERROR',
+      message: 'Database non raggiungibile',
+      error: error.message,
+      code: error.code || null,
+    });
+  }
+});
+
 // Avvia il server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

@@ -212,6 +212,7 @@ flutter run -d chrome
 - `POST /api/entrate`
 - `GET /api/entrate?limit=10`
 - `GET /api/health`
+- `GET /api/health/db`
 
 ## Test rapido API live (Render)
 
