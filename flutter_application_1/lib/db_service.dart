@@ -51,14 +51,22 @@ class DbService {
     defaultValue: '',
   );
 
+  static String? _currentUserMail;
   static String? _currentUserId;
-
-  static void setCurrentUserId(String? userId) {
-    final normalized = userId?.trim();
-    _currentUserId = (normalized != null && normalized.isNotEmpty)
-        ? normalized
+  
+  /// Imposta userId e mail dell'utente corrente (entrambi opzionali, ma almeno uno consigliato)
+  static void setCurrentUserId({String? userId, String? mail}) {
+    final normalizedId = userId?.trim();
+    final normalizedMail = mail?.trim();
+    
+    _currentUserId = (normalizedId != null && normalizedId.isNotEmpty)
+        ? normalizedId
+        : null;
+    _currentUserMail = (normalizedMail != null && normalizedMail.isNotEmpty)
+        ? normalizedMail
         : null;
   }
+
 
   static Map<String, String> _buildHeaders({bool includeContentType = false}) {
     final headers = <String, String>{
@@ -71,6 +79,9 @@ class DbService {
 
     if (_currentUserId != null && _currentUserId!.isNotEmpty) {
       headers['x-user-id'] = _currentUserId!;
+    }
+    if (_currentUserMail != null && _currentUserMail!.isNotEmpty) {
+      headers['x-user-mail'] = _currentUserMail!;
     }
 
     return headers;
@@ -446,6 +457,8 @@ class DbService {
 
   static Future<List<SpesaItem>> fetchUltimeSpese({int limit = 10}) async {
     try {
+
+
       final response = await _getRequest('/spese?limit=$limit');
       final rawList = response['spese'] as List<dynamic>? ?? <dynamic>[];
       return rawList

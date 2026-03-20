@@ -21,6 +21,9 @@ class HomePage extends StatefulWidget {
 
   @override
   State<HomePage> createState() => _HomePageState();
+
+
+  
 }
 
 class _HomePageState extends State<HomePage> {
@@ -29,9 +32,15 @@ class _HomePageState extends State<HomePage> {
   List<EntrataItem> _ultimeEntrate = <EntrataItem>[];
   bool _isLoading = true;
 
+
+  
   @override
   void initState() {
     super.initState();
+    print("nome: ${widget.name}, email: ${widget.email}");
+
+    // Imposta userId e mail globali per tutte le richieste
+    DbService.setCurrentUserId(userId: widget.name, mail: widget.email);
     _caricaUltimeSpese();
   }
 
@@ -517,7 +526,7 @@ class _HomePageState extends State<HomePage> {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: () {
-                        DbService.setCurrentUserId(null);
+                        DbService.setCurrentUserId(userId: null, mail: null);
                         Navigator.pushReplacement(
                           context,
                           MaterialPageRoute(builder: (_) => const LoginPage()),

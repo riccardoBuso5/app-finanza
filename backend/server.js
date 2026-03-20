@@ -81,6 +81,7 @@ function extractUserIdentity(req) {
   const mail = typeof rawMail === 'string' ? rawMail.trim() : '';
   const userId = typeof rawUserId === 'string' ? rawUserId.trim() : '';
 
+  console.log(" mail:", mail, "userId:", userId);
   return { mail, userId };
 }
 
