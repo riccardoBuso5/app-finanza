@@ -745,7 +745,7 @@ app.get('/api/health/db', async (_req, res) => {
 });
 
 // Avvia il server
-const PORT = process.env.PORT || 3002; //cambiare in 3000 per db remoto 
+const PORT = process.env.PORT || 3000; //cambiare in 3000 per db remoto 
 function startServer() {
   app.listen(PORT, () => {
     console.log(`Server in ascolto su http://localhost:${PORT}`);
