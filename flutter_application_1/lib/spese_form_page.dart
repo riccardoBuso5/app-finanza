@@ -11,9 +11,11 @@ class SpeseFormPage extends StatefulWidget {
 }
 
 class _SpeseFormPageState extends State<SpeseFormPage> {
+
   final _formKey = GlobalKey<FormState>();
   final _nomeController = TextEditingController();
   final _prezzoController = TextEditingController();
+  
   List<CategoriaItem> _categorie = <CategoriaItem>[];
   List<SpesaItem> _ultimeSpese = <SpesaItem>[];
   int? _categoriaSelezionataId;

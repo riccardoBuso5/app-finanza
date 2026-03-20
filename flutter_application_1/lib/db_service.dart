@@ -51,6 +51,7 @@ class DbService {
     defaultValue: '',
   );
 
+  
   static String? _currentUserMail;
   static String? _currentUserId;
   
@@ -58,7 +59,7 @@ class DbService {
   static void setCurrentUserId({String? userId, String? mail}) {
     final normalizedId = userId?.trim();
     final normalizedMail = mail?.trim();
-    
+
     _currentUserId = (normalizedId != null && normalizedId.isNotEmpty)
         ? normalizedId
         : null;

@@ -74,38 +74,45 @@ const pool = mysql.createPool({
   queueLimit: 0,
 });
 
-function extractUserIdentity(req) {
-  const rawMail = req.headers['x-user-mail'] ?? req.body?.mail ?? req.body?.email ?? req.query?.mail;
-  const rawUserId = req.headers['x-user-id'] ?? req.body?.userId ?? req.query?.userId;
 
-  const mail = typeof rawMail === 'string' ? rawMail.trim() : '';
-  const userId = typeof rawUserId === 'string' ? rawUserId.trim() : '';
-
-  console.log(" mail:", mail, "userId:", userId);
-  return { mail, userId };
-}
-
-// Funzione helper per ottenere l'email dell'utente da userid
+//funzione helper per recuperare mail da header e verificare che esista nel db
 async function requireUserMail(req, res, conn) {
-  const { userId } = extractUserIdentity(req);
-
-  if (userId) {
-    const [rows] = await conn.execute(
-      'SELECT mail FROM user WHERE userId = ? LIMIT 1',
-      [userId]
-    );
-    if (rows.length > 0 && rows[0].mail) {
-      return String(rows[0].mail).trim();
-    }
+  const userMail = req.headers['x-user-mail'];  
+  if (!userMail) {
+    res.status(401).json({ message: 'Header x-user-mail mancante' });
+    return null;
   }
-
-  res.status(400).json({ message: 'Utente non identificato (mail o userId mancanti/non validi)' });
-  return null;
+  const [rows] = await conn.execute(
+    'SELECT mail FROM user WHERE mail = ? LIMIT 1',
+    [userMail]
+  );    
+  if (rows.length === 0) {
+    res.status(401).json({ message: 'Utente non trovato per mail: ' + userMail });
+    return null;
+  }
+  return rows[0].mail;
 }
 
 
+//funzione helper per recuperare nome da mail 
+async function requireUserName(req, res, conn) {
+  const userMail = req.headers['x-user-mail'];
+  if (!userMail) {
+    res.status(401).json({ message: 'Header x-user-mail mancante' });
+    return null;
+  } 
 
+  const [rows] = await conn.execute(
+    'SELECT userId FROM user WHERE mail = ? LIMIT 1',
+    [userMail]
+  );  
+  if (rows.length === 0) {
+    res.status(401).json({ message: 'Utente non trovato per mail: ' + userMail });
+    return null;
+  }
+  return rows[0].userId;
 
+}
 
 // Nota: ogni endpoint apre una connessione dal pool e la rilascia sempre nel finally.
 // In questo modo si evitano connessioni "bloccate" quando ci sono errori.
@@ -394,9 +401,11 @@ app.post('/api/spese', async (req, res) => {
 
       await conn.commit();
       return res.status(201).json({
-        message: 'Spesa salvata con successo',
-        idspese: spesaId,
+        message: 'Spesa salvata con successo da '+userMail,
+        idspese: spesaId, 
       });
+
+
     } catch (error) {
       await conn.rollback();
       throw error;
@@ -736,7 +745,7 @@ app.get('/api/health/db', async (_req, res) => {
 });
 
 // Avvia il server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3002; //cambiare in 3000 per db remoto 
 function startServer() {
   app.listen(PORT, () => {
     console.log(`Server in ascolto su http://localhost:${PORT}`);
