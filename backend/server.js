@@ -378,7 +378,7 @@ app.put('/api/spese/:idspese', async (req, res) => {
     const conn = await pool.getConnection();
     try {
       const [result] = await conn.execute(
-        'UPDATE spese SET nome = ?, giorno = STR_TO_DATE(?, "%Y-%m-%d"), prezzo = ?, idcategoria = ? WHERE idspese = ? LIMIT 1',
+        'UPDATE spese SET nome = ?, giorno = STR_TO_DATE(?, \'%Y-%m-%d\'), prezzo = ?, idcategoria = ? WHERE idspese = ? LIMIT 1',
         [nome.trim(), String(giorno), prezzoInt, categoriaId, idspese]
       );
 
@@ -425,7 +425,7 @@ app.post('/api/entrate', async (req, res) => {
     try {
       
       const [result] = await conn.execute(
-        'INSERT INTO entrate (nome, prezzo, data) VALUES (?, ?, STR_TO_DATE(?, "%Y-%m-%d"))',
+        'INSERT INTO entrate (nome, prezzo, data) VALUES (?, ?, STR_TO_DATE(?, \'%Y-%m-%d\'))',
         [nome.trim(), prezzoInt, normalizedDate]
       );
 
@@ -476,7 +476,7 @@ app.put('/api/entrate/:identrate', async (req, res) => {
     const conn = await pool.getConnection();
     try {
       const [result] = await conn.execute(
-        'UPDATE entrate SET nome = ?, prezzo = ?, data = STR_TO_DATE(?, "%Y-%m-%d") WHERE identrate = ? LIMIT 1',
+        'UPDATE entrate SET nome = ?, prezzo = ?, data = STR_TO_DATE(?, \'%Y-%m-%d\') WHERE identrate = ? LIMIT 1',
         [nome.trim(), prezzoInt, normalizedDate, identrate]
       );
 
