@@ -20,7 +20,28 @@ function buildDbSslConfig() {
 
   if (dbSslCaBase64) {
     try {
-      sslConfig.ca = Buffer.from(dbSslCaBase64, 'base64').toString('utf8');
+      const raw = String(dbSslCaBase64).trim();
+
+      if (raw.includes('BEGIN CERTIFICATE')) {
+        // Supporta anche un PEM completo passato dentro DATABASE_SSL_CA_BASE64.
+        sslConfig.ca = raw.includes('\\n') ? raw.replace(/\\n/g, '\n') : raw;
+      } else {
+        const decodedUtf8 = Buffer.from(raw, 'base64').toString('utf8');
+        if (decodedUtf8.includes('BEGIN CERTIFICATE')) {
+          // Caso: PEM codificato in base64.
+          sslConfig.ca = decodedUtf8;
+        } else {
+          // Caso: body base64 "nudo" (MIIE...) senza header/footer PEM.
+          const normalizedBody = raw.replace(/\s+/g, '');
+          const wrapped = normalizedBody.match(/.{1,64}/g) || [normalizedBody];
+          sslConfig.ca = [
+            '-----BEGIN CERTIFICATE-----',
+            ...wrapped,
+            '-----END CERTIFICATE-----',
+            '',
+          ].join('\n');
+        }
+      }
     } catch (error) {
       console.error('DATABASE_SSL_CA_BASE64 non valido, impossibile decodificare il certificato CA:', error.message);
     }
