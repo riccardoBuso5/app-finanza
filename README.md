@@ -153,13 +153,14 @@ CREATE TABLE IF NOT EXISTS spese (
 );
 
 CREATE TABLE IF NOT EXISTS entrate (
-  identrate INT PRIMARY KEY,
+  identrate INT AUTO_INCREMENT PRIMARY KEY,
   nome VARCHAR(45) NOT NULL,
-  prezzo INT NOT NULL
+  prezzo INT NOT NULL,
+  data DATE NOT NULL
 );
 ```
 
-Nota: la tabella `entrate` non usa `AUTO_INCREMENT` in questo progetto; l'ID viene calcolato lato backend.
+Nota: l'API backend inserisce le entrate con `nome`, `prezzo` e `data`.
 
 ### 3) Avvio servizi
 
@@ -212,6 +213,26 @@ flutter run -d chrome
 - `GET /api/entrate?limit=10`
 - `GET /api/health`
 
+## Test rapido API live (Render)
+
+Per verificare che il backend in produzione sia davvero operativo (health + DB + CRUD base), usa lo script PowerShell [test_live_api.ps1](test_live_api.ps1).
+
+Esempio:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\test_live_api.ps1 -BaseUrl "https://app-finanza.onrender.com/"
+```
+
+Parametri utili:
+- `-BaseUrl` (obbligatorio): URL base del backend (con o senza `/api`)
+- `-TestUserId`, `-TestEmail`, `-TestPassword`: override dati utente test
+- `-SkipCleanup`: non cancella record di test creati
+- `-TimeoutSec`: timeout chiamate HTTP
+
+Interpretazione risultato:
+- Se passa solo `/api/health` ma gli altri endpoint vanno in `500`, il servizio e online ma la connessione DB in produzione non e configurata correttamente.
+- Se fallisce anche `/api/health`, il problema e sul deployment/app runtime (non sul DB).
+
 ## Sicurezza e validazioni
 
 - Password mai salvate in chiaro: vengono hashate con `bcryptjs`.
@@ -232,6 +253,12 @@ flutter run -d chrome
   controlla che le tabelle esistano e che il DB sia raggiungibile.
 - CORS o rete su browser:
   assicurati che il backend sia avviato prima del frontend.
+- Su Render `/api/health` risponde ma le altre API tornano `500`:
+  verifica variabili ambiente `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NAME`.
+- Se usi PlanetScale o DB managed con TLS:
+  imposta `DATABASE_SSL=true`; se richiesto dal provider, prova `DATABASE_SSL_REJECT_UNAUTHORIZED=false`.
+- Dopo modifica env vars su Render:
+  esegui un redeploy/restart del servizio e ripeti lo smoke test.
 
 ## Possibili evoluzioni
 

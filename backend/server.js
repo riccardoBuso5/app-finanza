@@ -6,6 +6,9 @@ const bcrypt = require('bcryptjs');
 
 const app = express();
 
+const dbSslEnabled = String(process.env.DATABASE_SSL || '').toLowerCase() === 'true';
+const dbSslRejectUnauthorized = String(process.env.DATABASE_SSL_REJECT_UNAUTHORIZED || 'true').toLowerCase() === 'true';
+
 // Configurazione API:
 // - CORS per consentire chiamate dal frontend
 // - JSON parser per leggere il body delle richieste
@@ -20,6 +23,7 @@ const pool = mysql.createPool({
   user: process.env.DATABASE_USER,
   password: process.env.DATABASE_PASSWORD,
   database: process.env.DATABASE_NAME,
+  ssl: dbSslEnabled ? { rejectUnauthorized: dbSslRejectUnauthorized } : undefined,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
