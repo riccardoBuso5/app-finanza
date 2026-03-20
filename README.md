@@ -83,7 +83,7 @@ app-finanza/
 ## Flusso utente (end-to-end)
 
 1. L'utente crea account dalla schermata di registrazione.
-2. Effettua login con `userId` e password.
+2. Effettua login con `email` e password.
 3. Inserisce una o piu categorie personali.
 4. Registra le spese selezionando categoria e data.
 5. Registra eventuali entrate.
@@ -130,14 +130,21 @@ CREATE DATABASE IF NOT EXISTS finanzadb;
 USE finanzadb;
 
 CREATE TABLE IF NOT EXISTS user (
-  userId VARCHAR(100) PRIMARY KEY,
-  mail VARCHAR(255) NOT NULL UNIQUE,
+  mail VARCHAR(255) PRIMARY KEY,
+  userId VARCHAR(100) NOT NULL,
   password VARCHAR(255) NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS categorie (
   idcategoria INT AUTO_INCREMENT PRIMARY KEY,
-  nome VARCHAR(100) NOT NULL UNIQUE
+  nome VARCHAR(100) NOT NULL,
+  mail VARCHAR(255) NOT NULL,
+  INDEX idx_categorie_mail (mail),
+  UNIQUE KEY uq_categorie_mail_nome (mail, nome),
+  CONSTRAINT fk_categorie_user_mail
+    FOREIGN KEY (mail) REFERENCES user(mail)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS spese (
@@ -146,8 +153,14 @@ CREATE TABLE IF NOT EXISTS spese (
   giorno DATE NOT NULL,
   prezzo INT NOT NULL,
   idcategoria INT NOT NULL,
+  mail VARCHAR(255) NOT NULL,
+  INDEX idx_spese_mail (mail),
   CONSTRAINT fk_spese_categoria
     FOREIGN KEY (idcategoria) REFERENCES categorie(idcategoria)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT,
+  CONSTRAINT fk_spese_user_mail
+    FOREIGN KEY (mail) REFERENCES user(mail)
     ON UPDATE CASCADE
     ON DELETE RESTRICT
 );
@@ -156,11 +169,17 @@ CREATE TABLE IF NOT EXISTS entrate (
   identrate INT AUTO_INCREMENT PRIMARY KEY,
   nome VARCHAR(45) NOT NULL,
   prezzo INT NOT NULL,
-  data DATE NOT NULL
+  data DATE NOT NULL,
+  mail VARCHAR(255) NOT NULL,
+  INDEX idx_entrate_mail (mail),
+  CONSTRAINT fk_entrate_user_mail
+    FOREIGN KEY (mail) REFERENCES user(mail)
+    ON UPDATE CASCADE
+    ON DELETE RESTRICT
 );
 ```
 
-Nota: l'API backend inserisce le entrate con `nome`, `prezzo` e `data`.
+Nota: il backend non esegue migrazioni automatiche dello schema all'avvio. Assicurati che il DB sia gia allineato prima del deploy.
 
 ### 3) Avvio servizi
 
