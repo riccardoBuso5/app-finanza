@@ -30,6 +30,20 @@ Obiettivo: avere un diario economico minimale, chiaro e facilmente estendibile.
 - Lettura lista entrate ordinate per id decrescente
 - Endpoint health check per verificare che il server sia operativo
 
+## Screenshot
+
+### Login
+
+![Login](backend/screen/image_login.png)
+
+### Home / Spese
+
+![Home e Spese](backend/screen/image.png)
+
+### Bilancio
+
+![Bilancio](backend/screen/image_bilancio.png)
+
 ## Architettura
 
 ### Frontend (Flutter)
