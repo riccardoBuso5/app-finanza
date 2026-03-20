@@ -103,7 +103,7 @@ class DbService {
     }
 
     if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:3002/api';
+      return 'https://app-finanza.onrender.com/api';
     }
 
     return 'http://localhost:3002/api';
