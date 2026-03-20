@@ -11,6 +11,7 @@ const dbSslRejectUnauthorized = String(process.env.DATABASE_SSL_REJECT_UNAUTHORI
 const dbSslCaBase64 = process.env.DATABASE_SSL_CA_BASE64;
 const dbSslCaPem = process.env.DATABASE_SSL_CA;
 
+//per configurare la connessione SSL al db
 function buildDbSslConfig() {
   if (!dbSslEnabled) return undefined;
 
@@ -83,12 +84,9 @@ function extractUserIdentity(req) {
   return { mail, userId };
 }
 
+// Funzione helper per ottenere l'email dell'utente da userid
 async function requireUserMail(req, res, conn) {
-  const { mail, userId } = extractUserIdentity(req);
-
-  if (mail) {
-    return mail;
-  }
+  const { userId } = extractUserIdentity(req);
 
   if (userId) {
     const [rows] = await conn.execute(
@@ -104,53 +102,13 @@ async function requireUserMail(req, res, conn) {
   return null;
 }
 
-async function bootstrapSchema() {
-  const conn = await pool.getConnection();
-  try {
-    await conn.execute('ALTER TABLE categorie ADD COLUMN IF NOT EXISTS mail VARCHAR(45) NULL');
-    await conn.execute('ALTER TABLE spese ADD COLUMN IF NOT EXISTS mail VARCHAR(45) NULL');
-    await conn.execute('ALTER TABLE entrate ADD COLUMN IF NOT EXISTS mail VARCHAR(45) NULL');
 
-    await conn.execute('ALTER TABLE categorie MODIFY COLUMN mail VARCHAR(45) NULL');
-    await conn.execute('ALTER TABLE spese MODIFY COLUMN mail VARCHAR(45) NULL');
-    await conn.execute('ALTER TABLE entrate MODIFY COLUMN mail VARCHAR(45) NULL');
 
-    await conn.execute('CREATE INDEX IF NOT EXISTS idx_categorie_mail ON categorie (mail)');
-    await conn.execute('CREATE INDEX IF NOT EXISTS idx_spese_mail ON spese (mail)');
-    await conn.execute('CREATE INDEX IF NOT EXISTS idx_entrate_mail ON entrate (mail)');
 
-    // Backfill ownership mail partendo da userId, quando disponibile.
-    await conn.execute(
-      `UPDATE categorie c
-       JOIN user u ON u.userId = c.userId
-       SET c.mail = u.mail
-       WHERE c.mail IS NULL
-         AND c.userId IS NOT NULL
-         AND c.userId <> ''`
-    );
-    await conn.execute(
-      `UPDATE spese s
-       JOIN user u ON u.userId = s.userId
-       SET s.mail = u.mail
-       WHERE s.mail IS NULL
-         AND s.userId IS NOT NULL
-         AND s.userId <> ''`
-    );
-    await conn.execute(
-      `UPDATE entrate e
-       JOIN user u ON u.userId = e.userId
-       SET e.mail = u.mail
-       WHERE e.mail IS NULL
-         AND e.userId IS NOT NULL
-         AND e.userId <> ''`
-    );
-  } finally {
-    conn.release();
-  }
-}
 
 // Nota: ogni endpoint apre una connessione dal pool e la rilascia sempre nel finally.
 // In questo modo si evitano connessioni "bloccate" quando ci sono errori.
+
 // Endpoint di registrazione
 app.post('/api/register', async (req, res) => {
   try {
@@ -160,7 +118,9 @@ app.post('/api/register', async (req, res) => {
       return res.status(400).json({ message: 'Compila tutti i campi' });
     }
 
+    //apre la connessione
     const conn = await pool.getConnection();
+
     try {
       const [rows] = await conn.execute(
         'SELECT mail FROM user WHERE mail = ?',
@@ -172,7 +132,7 @@ app.post('/api/register', async (req, res) => {
 
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // Salva password hashata (mai in chiaro) per motivi di sicurezza.
+      // Salva password hashata  per motivi di sicurezza.
       await conn.execute(
         'INSERT INTO user (userId, mail, password) VALUES (?, ?, ?)',
         [userId, email, hashedPassword]
@@ -183,6 +143,7 @@ app.post('/api/register', async (req, res) => {
         user: { userId, email },
       });
     } finally {
+      //rilascia la connessione al database
       conn.release();
     }
   } catch (error) {
@@ -250,6 +211,7 @@ app.post('/api/categorie', async (req, res) => {
       const userMail = await requireUserMail(req, res, conn);
       if (!userMail) return;
 
+      //controllo se categoria già esistente per questo utente (evitiamo doppioni)
       const [existingRows] = await conn.execute(
         'SELECT idcategoria FROM categorie WHERE mail = ? AND nome = ? LIMIT 1',
         [userMail, nome.trim()]
@@ -258,6 +220,7 @@ app.post('/api/categorie', async (req, res) => {
         return res.status(400).json({ message: 'Categoria gia esistente' });
       }
 
+      //inserisco nel db
       const [result] = await conn.execute(
         'INSERT INTO categorie (nome, mail) VALUES (?, ?)',
         [nome.trim(), userMail]
@@ -287,6 +250,7 @@ app.get('/api/categorie', async (req, res) => {
       const userMail = await requireUserMail(req, res, conn);
       if (!userMail) return;
 
+      //selezione le categorie del utente ordinandole per nome (ASC)
       const [rows] = await conn.execute(
         'SELECT idcategoria, nome FROM categorie WHERE mail = ? ORDER BY nome ASC',
         [userMail]
@@ -301,6 +265,7 @@ app.get('/api/categorie', async (req, res) => {
   }
 });
 
+//modifica la categoria selezionata
 app.put('/api/categorie/:idcategoria', async (req, res) => {
   try {
     const idcategoria = Number(req.params.idcategoria);
@@ -341,6 +306,7 @@ app.put('/api/categorie/:idcategoria', async (req, res) => {
   }
 });
 
+//cancello la categoria selezionata (solo se non usata in spese)
 app.delete('/api/categorie/:idcategoria', async (req, res) => {
   try {
     const idcategoria = Number(req.params.idcategoria);
@@ -388,6 +354,7 @@ app.post('/api/spese', async (req, res) => {
     const prezzoInt = Number(prezzo);
     if (!Number.isInteger(prezzoInt) || prezzoInt < 0) {
       return res.status(400).json({ message: 'Il prezzo deve essere un intero positivo' });
+      //ho scelto prezzo come intero per comodità dei calcoli, mettere float sul db se si usare più precisione
     }
 
     const giornoDate = new Date(giorno);
@@ -441,6 +408,7 @@ app.post('/api/spese', async (req, res) => {
   }
 });
 
+//modifica la spesa selezionata
 app.put('/api/spese/:idspese', async (req, res) => {
   try {
     const idspese = Number(req.params.idspese);
@@ -489,6 +457,39 @@ app.put('/api/spese/:idspese', async (req, res) => {
     }
   } catch (error) {
     console.error('Errore aggiornamento spesa:', error);
+    return res.status(500).json({ message: 'Errore server: ' + error.message });
+  }
+});
+
+//delete spese 
+app.delete('/api/spese/:idspese', async (req, res) => {
+  try {
+    const idspese = Number(req.params.idspese);
+
+    if (!Number.isInteger(idspese) || idspese <= 0) {
+      return res.status(400).json({ message: 'ID spesa non valido' });
+    }
+
+    const conn = await pool.getConnection();
+    try {
+      const userMail = await requireUserMail(req, res, conn);
+      if (!userMail) return;
+
+      const [result] = await conn.execute(
+        'DELETE FROM spese WHERE idspese = ? AND mail = ? LIMIT 1',
+        [idspese, userMail]
+      );
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ message: 'Spesa non trovata' });
+      }
+
+      return res.json({ message: 'Spesa eliminata con successo' });
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    console.error('Errore cancellazione spesa:', error);
     return res.status(500).json({ message: 'Errore server: ' + error.message });
   }
 });
@@ -549,6 +550,7 @@ app.post('/api/entrate', async (req, res) => {
   }
 });
 
+//modifica la entrata selezionata
 app.put('/api/entrate/:identrate', async (req, res) => {
   try {
     const identrate = Number(req.params.identrate);
@@ -599,6 +601,40 @@ app.put('/api/entrate/:identrate', async (req, res) => {
   }
 });
 
+//delete entrata
+
+app.delete('/api/entrate/:identrate', async (req, res) => {
+  try {
+    const identrate = Number(req.params.identrate);
+
+    if (!Number.isInteger(identrate) || identrate <= 0) {
+      return res.status(400).json({ message: 'ID entrata non valido' });
+    }
+
+    const conn = await pool.getConnection();
+    try {
+      const userMail = await requireUserMail(req, res, conn);
+      if (!userMail) return;
+
+      const [result] = await conn.execute(
+        'DELETE FROM entrate WHERE identrate = ? AND mail = ? LIMIT 1',
+        [identrate, userMail]
+      );
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ message: 'Entrata non trovata' });
+      }
+
+      return res.json({ message: 'Entrata eliminata con successo' });
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    console.error('Errore cancellazione entrata:', error);
+    return res.status(500).json({ message: 'Errore server: ' + error.message });
+  }
+});
+
 // Endpoint ultime spese per Home
 app.get('/api/spese', async (req, res) => {
   try {
@@ -613,6 +649,7 @@ app.get('/api/spese', async (req, res) => {
       const userMail = await requireUserMail(req, res, conn);
       if (!userMail) return;
 
+      //trova solo le spese del utente loggato
       const [rows] = await conn.query(
         `SELECT s.idspese, s.nome, DATE_FORMAT(s.giorno, '%Y-%m-%d') AS giorno, s.prezzo, s.idcategoria, c.nome AS categoria_nome
          FROM spese s
@@ -632,6 +669,7 @@ app.get('/api/spese', async (req, res) => {
     return res.status(500).json({ message: 'Errore server: ' + error.message });
   }
 });
+
 
 app.get('/api/entrate', async (req, res) => {
   try {
@@ -669,69 +707,7 @@ app.get('/api/entrate', async (req, res) => {
   }
 });
 
-app.delete('/api/spese/:idspese', async (req, res) => {
-  try {
-    const idspese = Number(req.params.idspese);
 
-    if (!Number.isInteger(idspese) || idspese <= 0) {
-      return res.status(400).json({ message: 'ID spesa non valido' });
-    }
-
-    const conn = await pool.getConnection();
-    try {
-      const userMail = await requireUserMail(req, res, conn);
-      if (!userMail) return;
-
-      const [result] = await conn.execute(
-        'DELETE FROM spese WHERE idspese = ? AND mail = ? LIMIT 1',
-        [idspese, userMail]
-      );
-
-      if (result.affectedRows === 0) {
-        return res.status(404).json({ message: 'Spesa non trovata' });
-      }
-
-      return res.json({ message: 'Spesa eliminata con successo' });
-    } finally {
-      conn.release();
-    }
-  } catch (error) {
-    console.error('Errore cancellazione spesa:', error);
-    return res.status(500).json({ message: 'Errore server: ' + error.message });
-  }
-});
-
-app.delete('/api/entrate/:identrate', async (req, res) => {
-  try {
-    const identrate = Number(req.params.identrate);
-
-    if (!Number.isInteger(identrate) || identrate <= 0) {
-      return res.status(400).json({ message: 'ID entrata non valido' });
-    }
-
-    const conn = await pool.getConnection();
-    try {
-      const userMail = await requireUserMail(req, res, conn);
-      if (!userMail) return;
-
-      const [result] = await conn.execute(
-        'DELETE FROM entrate WHERE identrate = ? AND mail = ? LIMIT 1',
-        [identrate, userMail]
-      );
-
-      if (result.affectedRows === 0) {
-        return res.status(404).json({ message: 'Entrata non trovata' });
-      }
-
-      return res.json({ message: 'Entrata eliminata con successo' });
-    } finally {
-      conn.release();
-    }
-  } catch (error) {
-    console.error('Errore cancellazione entrata:', error);
-    return res.status(500).json({ message: 'Errore server: ' + error.message });
-  }
-});
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -760,17 +736,12 @@ app.get('/api/health/db', async (_req, res) => {
 
 // Avvia il server
 const PORT = process.env.PORT || 3000;
-async function startServer() {
-  try {
-    await bootstrapSchema();
-    app.listen(PORT, () => {
-      console.log(`Server in ascolto su http://localhost:${PORT}`);
-    });
-  } catch (error) {
-    console.error('Errore bootstrap schema:', error);
-    process.exit(1);
-  }
+function startServer() {
+  app.listen(PORT, () => {
+    console.log(`Server in ascolto su http://localhost:${PORT}`);
+  });
 }
+
 
 startServer();
 

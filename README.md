@@ -21,7 +21,7 @@ Obiettivo: avere un diario economico minimale, chiaro e facilmente estendibile.
 
 ## Funzionalita principali
 
-- Registrazione utente con controllo email e username univoci
+- Registrazione utente con email univoca (username anche duplicabile)
 - Login con verifica password hashata
 - Gestione catalogo categorie
 - Inserimento spese con validazioni lato backend
@@ -164,16 +164,23 @@ Nota: l'API backend inserisce le entrate con `nome`, `prezzo` e `data`.
 
 ### 3) Avvio servizi
 
-Metodo consigliato (avvio parallelo backend + Flutter):
+Metodo consigliato (dalla root del repository, avvio parallelo backend + Flutter):
 
 ```powershell
 .\run_flutter_clean_and_start.ps1 -Device chrome
+```
+
+Se PowerShell blocca lo script (ExecutionPolicy), usa:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run_flutter_clean_and_start.ps1 -Device chrome
 ```
 
 Parametri script:
 - `-FlutterProjectPath` (default: `flutter_application_1`)
 - `-SkipPubGet` (switch)
 - `-Device` (default: `chrome`, supporta anche `emulator` o un id device Flutter)
+- `-ApiBaseUrl` (opzionale: se valorizzato usa API remota e non avvia il backend locale)
 
 Esempi:
 
@@ -182,7 +189,34 @@ Esempi:
 .\run_flutter_clean_and_start.ps1 -SkipPubGet
 .\run_flutter_clean_and_start.ps1 -Device emulator
 .\run_flutter_clean_and_start.ps1 -Device windows
+.\run_flutter_clean_and_start.ps1 -Device chrome -ApiBaseUrl "https://app-finanza.onrender.com/api"
 ```
+
+Nota importante su `-ApiBaseUrl`:
+- non passare il parametro vuoto (es. `-ApiBaseUrl` senza valore)
+- se non ti serve API remota, ometti proprio il parametro
+
+### Avvio con DB in rete
+
+Hai due modalita possibili:
+
+1. Backend gia online (collegato al DB remoto)
+
+Usa API remote e avvia solo Flutter:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run_flutter_clean_and_start.ps1 -Device chrome -ApiBaseUrl "https://app-finanza.onrender.com/api"
+```
+
+2. Backend locale + DB remoto (Aiven/PlanetScale)
+
+Imposta le variabili DB remote nel file `backend/.env`, poi avvia senza `-ApiBaseUrl`:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run_flutter_clean_and_start.ps1 -Device chrome
+```
+
+Nota: se scrivi `-ApiBaseUrl` senza valore, lo script termina con errore.
 
 Avvio manuale (alternativa):
 

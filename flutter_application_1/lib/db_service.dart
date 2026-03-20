@@ -80,6 +80,7 @@ class DbService {
   // Android emulator -> 10.0.2.2
   // Web/Desktop -> localhost
   static String get _baseUrl {
+
     if (_apiBaseUrlFromDefine.trim().isNotEmpty) {
       final raw = _apiBaseUrlFromDefine.trim().replaceAll(RegExp(r'/+$'), '');
       return raw.endsWith('/api') ? raw : '$raw/api';
@@ -485,7 +486,7 @@ class DbService {
               categoriaNome: categoriaNome,
             );
           })
-          // Manteniamo solo le righe completamente parseabili.
+          // Manteniamo solo le righe utili
           .whereType<SpesaItem>()
           .toList();
     } catch (e) {
