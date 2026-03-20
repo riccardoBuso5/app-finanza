@@ -256,7 +256,9 @@ Interpretazione risultato:
 - Su Render `/api/health` risponde ma le altre API tornano `500`:
   verifica variabili ambiente `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NAME`.
 - Se usi PlanetScale o DB managed con TLS:
-  imposta `DATABASE_SSL=true`; se richiesto dal provider, prova `DATABASE_SSL_REJECT_UNAUTHORIZED=false`.
+  imposta `DATABASE_SSL=true`; se richiesto dal provider, aggiungi CA con `DATABASE_SSL_CA_BASE64` (consigliato) o `DATABASE_SSL_CA`.
+- Se ricevi `self-signed certificate in certificate chain`:
+  configura la CA del provider e mantieni `DATABASE_SSL_REJECT_UNAUTHORIZED=true`; usa `false` solo come test temporaneo.
 - Dopo modifica env vars su Render:
   esegui un redeploy/restart del servizio e ripeti lo smoke test.
 

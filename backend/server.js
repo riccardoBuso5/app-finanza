@@ -8,6 +8,29 @@ const app = express();
 
 const dbSslEnabled = String(process.env.DATABASE_SSL || '').toLowerCase() === 'true';
 const dbSslRejectUnauthorized = String(process.env.DATABASE_SSL_REJECT_UNAUTHORIZED || 'true').toLowerCase() === 'true';
+const dbSslCaBase64 = process.env.DATABASE_SSL_CA_BASE64;
+const dbSslCaPem = process.env.DATABASE_SSL_CA;
+
+function buildDbSslConfig() {
+  if (!dbSslEnabled) return undefined;
+
+  const sslConfig = {
+    rejectUnauthorized: dbSslRejectUnauthorized,
+  };
+
+  if (dbSslCaBase64) {
+    try {
+      sslConfig.ca = Buffer.from(dbSslCaBase64, 'base64').toString('utf8');
+    } catch (error) {
+      console.error('DATABASE_SSL_CA_BASE64 non valido, impossibile decodificare il certificato CA:', error.message);
+    }
+  } else if (dbSslCaPem) {
+    // Supporta certificato passato come singola riga con \n escapati.
+    sslConfig.ca = dbSslCaPem.includes('\\n') ? dbSslCaPem.replace(/\\n/g, '\n') : dbSslCaPem;
+  }
+
+  return sslConfig;
+}
 
 // Configurazione API:
 // - CORS per consentire chiamate dal frontend
@@ -23,7 +46,7 @@ const pool = mysql.createPool({
   user: process.env.DATABASE_USER,
   password: process.env.DATABASE_PASSWORD,
   database: process.env.DATABASE_NAME,
-  ssl: dbSslEnabled ? { rejectUnauthorized: dbSslRejectUnauthorized } : undefined,
+  ssl: buildDbSslConfig(),
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
