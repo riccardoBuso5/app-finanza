@@ -250,9 +250,9 @@ if (-not $SkipCleanup) {
     }
 }
 
-$failedRequired = $results | Where-Object {
+$failedRequired = @($results | Where-Object {
     $_.Name -in @("Health", "Login", "ListCategories", "ListExpenses", "CreateIncome", "ListIncomes") -and -not $_.Ok
-}
+})
 
 Write-Host ""
 Write-Host "==== SUMMARY ====" -ForegroundColor White
