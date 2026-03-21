@@ -105,6 +105,12 @@ class DbService {
     if (defaultTargetPlatform == TargetPlatform.android) {
       return 'https://app-finanza.onrender.com/api';
     }
+    if (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.macOS) {
+      return 'https://app-finanza.onrender.com/api';
+    }
+    if(defaultTargetPlatform == TargetPlatform.windows || defaultTargetPlatform == TargetPlatform.linux) {
+      return 'https://app-finanza.onrender.com/api';
+    }
 
     return 'http://localhost:3002/api';
   }
