@@ -103,13 +103,13 @@ class DbService {
     }
 
     if (defaultTargetPlatform == TargetPlatform.android) {
-      return 'https://app-finanza.onrender.com/api';
+      return 'https://app-finanza.vercel.app/api';
     }
     if (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.macOS) {
-      return 'https://app-finanza.onrender.com/api';
+      return 'https://app-finanza.vercel.app/api';
     }
     if(defaultTargetPlatform == TargetPlatform.windows || defaultTargetPlatform == TargetPlatform.linux) {
-      return 'https://app-finanza.onrender.com/api';
+      return 'https://app-finanza.vercel.app/api';
     }
 
     return 'http://localhost:3002/api';
