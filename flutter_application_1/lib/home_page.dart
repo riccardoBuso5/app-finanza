@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'login_page.dart';
 import 'spese_form_page.dart';
 import 'categorie_form_page.dart';
@@ -21,9 +22,6 @@ class HomePage extends StatefulWidget {
 
   @override
   State<HomePage> createState() => _HomePageState();
-
-
-  
 }
 
 class _HomePageState extends State<HomePage> {
@@ -32,8 +30,6 @@ class _HomePageState extends State<HomePage> {
   List<EntrataItem> _ultimeEntrate = <EntrataItem>[];
   bool _isLoading = true;
 
-
-  
   @override
   void initState() {
     super.initState();
@@ -169,6 +165,24 @@ class _HomePageState extends State<HomePage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Entrata cancellata')));
+  }
+
+  Future<void> _logout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('remember_me', false);
+    await prefs.remove('saved_email');
+    await prefs.remove('saved_password');
+
+    DbService.setCurrentUserId(userId: null, mail: null);
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+    );
   }
 
   @override
@@ -525,13 +539,7 @@ class _HomePageState extends State<HomePage> {
                   child: SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: () {
-                        DbService.setCurrentUserId(userId: null, mail: null);
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (_) => const LoginPage()),
-                        );
-                      },
+                      onPressed: _logout,
                       icon: const Icon(Icons.logout),
                       label: const Text('Logout'),
                     ),
