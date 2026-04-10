@@ -330,7 +330,7 @@ class _BilancioMensilePageState extends State<BilancioMensilePage> {
                             ),
                             const SizedBox(height: 10),
                             DropdownButtonFormField<PeriodoBilancio>(
-                              value: _periodoSelezionato,
+                              initialValue: _periodoSelezionato,
                               items: PeriodoBilancio.values
                                   .map(
                                     (periodo) => DropdownMenuItem<PeriodoBilancio>(
@@ -372,7 +372,7 @@ class _BilancioMensilePageState extends State<BilancioMensilePage> {
                             ),
                             const SizedBox(height: 10),
                             DropdownButtonFormField<String>(
-                              value: _categoriaSelezionata,
+                              initialValue: _categoriaSelezionata,
                               decoration: const InputDecoration(
                                 labelText: 'Categoria spesa',
                                 border: OutlineInputBorder(),

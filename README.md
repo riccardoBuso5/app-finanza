@@ -222,7 +222,7 @@ Esempi:
 .\run_flutter_clean_and_start.ps1 -SkipPubGet
 .\run_flutter_clean_and_start.ps1 -Device emulator
 .\run_flutter_clean_and_start.ps1 -Device windows
-.\run_flutter_clean_and_start.ps1 -Device chrome -ApiBaseUrl "https://app-finanza.onrender.com/api"
+.\run_flutter_clean_and_start.ps1 -Device chrome -ApiBaseUrl 'https://app-finanza.vercel.app/api'
 ```
 
 Nota importante su `-ApiBaseUrl`:

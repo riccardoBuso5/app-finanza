@@ -22,7 +22,7 @@ class _LoginPageState extends State<LoginPage> {
   // Opzioni/UI state per la gestione delle credenziali salvate localmente.
   bool _ricordami = true;
   bool _isLoadingSavedCredentials = true;
-  
+
   // Chiave globale per identificare e validare il modulo (Form)
   final _formKey = GlobalKey<FormState>();
 
@@ -36,6 +36,7 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _loadSavedCredentials() async {
     final prefs = await SharedPreferences.getInstance();
     final savedEmail = prefs.getString('saved_email');
+    final savedPassword = prefs.getString('saved_password');
     final savedRemember = prefs.getBool('remember_me') ?? false;
 
     if (!mounted) {
@@ -46,12 +47,22 @@ class _LoginPageState extends State<LoginPage> {
       _ricordami = savedRemember;
       if (savedRemember) {
         _emailController.text = savedEmail ?? '';
+        _passwordController.text = savedPassword ?? '';
       }
       _isLoadingSavedCredentials = false;
     });
 
-    // Hardening: rimuove eventuali password in chiaro salvate da versioni precedenti.
-    await prefs.remove('saved_password');
+    if (savedRemember &&
+        (savedEmail ?? '').trim().isNotEmpty &&
+        (savedPassword ?? '').isNotEmpty) {
+      // Effettua il tentativo solo dopo il primo frame, quando la pagina è pronta.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        _login(isAutoLogin: true);
+      });
+    }
   }
 
   Future<void> _saveCredentialsIfNeeded() async {
@@ -59,7 +70,7 @@ class _LoginPageState extends State<LoginPage> {
     if (_ricordami) {
       await prefs.setBool('remember_me', true);
       await prefs.setString('saved_email', _emailController.text.trim());
-      await prefs.remove('saved_password');
+      await prefs.setString('saved_password', _passwordController.text);
     } else {
       await prefs.setBool('remember_me', false);
       await prefs.remove('saved_email');
@@ -76,57 +87,66 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   // Metodo chiamato quando si preme il pulsante "Accedi"
-  Future<void> _login() async {
-    // Controlla se tutti i campi del modulo sono validi
-    if (_formKey.currentState!.validate()) {
+  Future<void> _login({bool isAutoLogin = false}) async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (!isAutoLogin) {
+      // Controlla se tutti i campi del modulo sono validi
+      if (!(_formKey.currentState?.validate() ?? false)) {
+        return;
+      }
+    } else {
+      // In auto-login effettuiamo una validazione minima senza toccare il form.
+      if (email.isEmpty || !email.contains('@') || password.isEmpty) {
+        return;
+      }
+    }
+
+    if (mounted && !isAutoLogin) {
       // Mostra messaggio di attesa
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Tentativo di login in corso...')),
       );
+    }
 
-      // Chiama il backend per autenticare l'utente.
-      final user = await DbService.loginUser(
-        email: _emailController.text,
-        password: _passwordController.text
-      );
+    // Chiama il backend per autenticare l'utente.
+    final user = await DbService.loginUser(email: email, password: password);
 
- 
-      if (mounted) {
-        if (user != null) {
-          final userId = user['userId']?.toString().trim().isNotEmpty == true
-              ? user['userId'].toString().trim()
-              : (user['nome']?.toString().trim() ?? '');
+    if (mounted) {
+      if (user != null) {
+        final userId = user['userId']?.toString().trim().isNotEmpty == true
+            ? user['userId'].toString().trim()
+            : (user['nome']?.toString().trim() ?? '');
 
-          final email = user['email']?.toString().trim().isNotEmpty == true
-              ? user['email'].toString()
-              : _emailController.text.trim();
+        final resolvedEmail =
+            user['email']?.toString().trim().isNotEmpty == true
+            ? user['email'].toString()
+            : email;
 
-          DbService.setCurrentUserId(userId: userId, mail: email);
-          await _saveCredentialsIfNeeded();
+        DbService.setCurrentUserId(userId: userId, mail: resolvedEmail);
+        await _saveCredentialsIfNeeded();
 
-          final nomeRaw = user['nome']?.toString().trim();
-          final nome = (nomeRaw != null && nomeRaw.isNotEmpty) ? nomeRaw : 'Utente';
+        final nomeRaw = user['nome']?.toString().trim();
+        final nome = (nomeRaw != null && nomeRaw.isNotEmpty)
+            ? nomeRaw
+            : 'Utente';
 
-              
-          
+        // Login riuscito
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Benvenuto $nome!')));
+        print('Utente loggato: $nome ($resolvedEmail)');
 
-          // Login riuscito
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Benvenuto $nome!')),
-          );
-          print('Utente loggato: $nome ($email)');
-          
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => HomePage(
-                email: email,
-                name: nome,
-              ),
-            ),
-          );
-        } else {
-          DbService.setCurrentUserId(userId: null, mail: null);
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => HomePage(email: resolvedEmail, name: nome),
+          ),
+        );
+      } else {
+        DbService.setCurrentUserId(userId: null, mail: null);
+        if (!isAutoLogin) {
           // Login fallito
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Email o password non validi')),
@@ -140,7 +160,9 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final appBarColor = isDark ? const Color(0xFF0D2538) : const Color(0xFF114B5F);
+    final appBarColor = isDark
+        ? const Color(0xFF0D2538)
+        : const Color(0xFF114B5F);
     final bgTop = isDark ? const Color(0xFF0F1720) : const Color(0xFFF5F7FA);
     final bgBottom = isDark ? const Color(0xFF1A2330) : const Color(0xFFE8EEF2);
     final heroA = isDark ? const Color(0xFF0E7490) : const Color(0xFF114B5F);
@@ -272,7 +294,8 @@ class _LoginPageState extends State<LoginPage> {
                                   },
                                   contentPadding: EdgeInsets.zero,
                                   title: const Text('Ricordami'),
-                                  controlAffinity: ListTileControlAffinity.leading,
+                                  controlAffinity:
+                                      ListTileControlAffinity.leading,
                                 ),
                                 const SizedBox(height: 8),
                                 ElevatedButton.icon(
@@ -280,7 +303,9 @@ class _LoginPageState extends State<LoginPage> {
                                   icon: const Icon(Icons.login),
                                   label: const Text('Accedi'),
                                   style: ElevatedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 14,
+                                    ),
                                     backgroundColor: const Color(0xFF2A9D8F),
                                     foregroundColor: Colors.white,
                                   ),
@@ -290,10 +315,15 @@ class _LoginPageState extends State<LoginPage> {
                                   onPressed: () {
                                     Navigator.push(
                                       context,
-                                      MaterialPageRoute(builder: (context) => const RegistrationPage()),
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const RegistrationPage(),
+                                      ),
                                     );
                                   },
-                                  child: const Text('Non hai un account? Registrati'),
+                                  child: const Text(
+                                    'Non hai un account? Registrati',
+                                  ),
                                 ),
                               ],
                             ),

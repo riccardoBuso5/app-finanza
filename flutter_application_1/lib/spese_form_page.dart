@@ -382,7 +382,7 @@ class _SpeseFormPageState extends State<SpeseFormPage> {
                         )
                       else
                         DropdownButtonFormField<int>(
-                          value: _categoriaSelezionataId,
+                          initialValue: _categoriaSelezionataId,
                           decoration: const InputDecoration(
                             labelText: 'Categoria',
                             border: OutlineInputBorder(),
