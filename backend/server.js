@@ -752,12 +752,15 @@ function startServer() {
   });
 }
 
+if (require.main === module) {
+  startServer();
 
-startServer();
+  // Chiude il pool alla terminazione
+  process.on('SIGINT', async () => {
+    await pool.end();
+    console.log('\nConnessione al database chiusa');
+    process.exit(0);
+  });
+}
 
-// Chiude il pool alla terminazione
-process.on('SIGINT', async () => {
-  await pool.end();
-  console.log('\nConnessione al database chiusa');
-  process.exit(0);
-});
+module.exports = app;
