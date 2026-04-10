@@ -1,27 +1,32 @@
 ; Script Inno Setup per Spendimeno
 ; Generato da Copilot
 
+#define MyAppName "Spendimeno"
+#define MyAppVersion "1.0"
+#define MyAppExeName "Spendimeno.exe"
+
 [Setup]
-AppName=Spendimeno
-AppVersion=1.0
-DefaultDirName={pf64}\Spendimeno
-DefaultGroupName=Spendimeno
+AppName={#MyAppName}
+AppVersion={#MyAppVersion}
+DefaultDirName={pf64}\{#MyAppName}
+DefaultGroupName={#MyAppName}
 OutputBaseFilename=SpendimenoSetup
+OutputDir=Output
 Compression=lzma
 SolidCompression=yes
 
 [Files]
 ; Copia tutto il contenuto della cartella Release
-Source: "c:\Users\rikka\OneDrive\Documenti\PERSONALE\app-finanza\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: ".\*"; DestDir: "{app}"; Excludes: "Output\*"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Rinomina l'eseguibile principale
-Source: "c:\Users\rikka\OneDrive\Documenti\PERSONALE\app-finanza\Release\flutter_application_1.exe"; DestDir: "{app}"; DestName: "Spendimeno.exe"; Flags: ignoreversion
+Source: ".\flutter_application_1.exe"; DestDir: "{app}"; DestName: "{#MyAppExeName}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Spendimeno"; Filename: "{app}\Spendimeno.exe"
-Name: "{commondesktop}\Spendimeno"; Filename: "{app}\Spendimeno.exe"; Tasks: desktopicon
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Crea un'icona sul desktop"; GroupDescription: "Icone aggiuntive:"
 
 [Run]
-Filename: "{app}\Spendimeno.exe"; Description: "Avvia Spendimeno"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "Avvia {#MyAppName}"; Flags: nowait postinstall skipifsilent
